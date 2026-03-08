@@ -64,8 +64,8 @@ class FaissVectorStore:
                 f"of dimension {dimension}"
             )
 
-            # Create IndexFlatL2 (Euclidean distance)
-            self.index = faiss.IndexFlatL2(dimension)
+            # Create IndexFlatIP (cosine similarity with normalized vectors)
+            self.index = faiss.IndexFlatIP(dimension)
             self.index.add(embeddings)
 
             logger.info(
@@ -243,13 +243,13 @@ class FaissVectorStore:
                 )
 
             # Search
-            distances, indices = self.index.search(query_embedding, k)
+            similarities, indices = self.index.search(query_embedding, k)
 
-            # Pair metadata with distances
+            # Pair metadata with similarities
             results = []
-            for dist, idx in zip(distances[0], indices[0]):
+            for sim, idx in zip(similarities[0], indices[0]):
                 if 0 <= idx < len(self.metadata_list):
-                    results.append((self.metadata_list[idx].copy(), float(dist)))
+                    results.append((self.metadata_list[idx].copy(), float(sim)))
 
             logger.debug(
                 f"Similarity search with scores returned {len(results)} result(s)"

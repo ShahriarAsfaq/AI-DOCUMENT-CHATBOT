@@ -88,10 +88,12 @@ class RetrieverService:
             logger.info(f"Retrieving chunks for question: '{question[:60]}...'")
 
             # Step 1: Generate query variations
+            logger.info("Step 1: Generating query variations...")
             expanded_queries = generate_dynamic_search_queries(question)
-            logger.debug(f"Generated {len(expanded_queries)} query variation(s)")
+            logger.info(f"Generated {len(expanded_queries)} query variation(s): {[q[:30] + '...' for q in expanded_queries]}")
 
             # Step 2-4: Embed queries, search, and combine results
+            logger.info("Step 2-4: Performing multi-query search and combining results...")
             combined_results = self._search_multi_query(
                 expanded_queries, question
             )
@@ -106,16 +108,21 @@ class RetrieverService:
 
             # Step 5: Optional reranking
             if self.use_reranking:
+                logger.info("Step 5: Applying cross-encoder reranking...")
                 combined_results = self._rerank_results(
                     question, combined_results
                 )
-                logger.debug("Results reranked successfully")
+                logger.info("Reranking completed successfully")
+            else:
+                logger.info("Step 5: Skipping reranking (disabled)")
 
             # Step 6: Return top-k
+            logger.info(f"Step 6: Selecting top {self.top_k} results...")
             final_results = combined_results[: self.top_k]
 
             logger.info(
-                f"Retrieved {len(final_results)} chunk(s) for question. "
+                f"Retrieval complete. Retrieved {len(final_results)} chunk(s). "
+                f"Retrieval result. Retrieved {final_results} . "
                 f"Top score: {final_results[0][1]:.4f}"
             )
 
@@ -146,26 +153,31 @@ class RetrieverService:
 
         for i, query in enumerate(queries, 1):
             try:
-                logger.debug(
-                    f"Searching with query {i}/{len(queries)}: '{query[:40]}...'"
+                logger.info(
+                    f"Query {i}/{len(queries)}: Searching with '{query[:40]}...'"
                 )
 
                 # Embed query
+                logger.debug(f"Query {i}: Embedding query...")
                 query_embedding = self.embedding_service.encode([query])[0]
 
                 # Search
+                logger.debug(f"Query {i}: Performing vector similarity search...")
                 results = self.vector_store.similarity_search_with_score(
                     query_embedding,
                     k=self.top_k * 2,  # Fetch extra to account for deduplication
                 )
+                logger.info(f"Query {i}: Found {len(results)} raw results")
 
                 # Merge results, keeping best score per chunk
+                logger.debug(f"Query {i}: Merging results with existing chunks...")
                 for metadata, score in results:
                     # Use chunk_id as unique identifier if available
                     chunk_id = metadata.get("chunk_id", id(metadata))
 
                     if chunk_id not in combined_results_dict:
                         combined_results_dict[chunk_id] = (metadata, score)
+                        logger.debug(f"Query {i}: Added new chunk {chunk_id} with score {score:.4f}")
                     else:
                         # Keep the lower score (better match)
                         existing_metadata, existing_score = combined_results_dict[
@@ -173,6 +185,7 @@ class RetrieverService:
                         ]
                         if score < existing_score:
                             combined_results_dict[chunk_id] = (metadata, score)
+                            logger.debug(f"Query {i}: Updated chunk {chunk_id} score from {existing_score:.4f} to {score:.4f}")
 
             except Exception as e:
                 logger.warning(
@@ -218,14 +231,16 @@ class RetrieverService:
 
                 candidate_texts.append(chunk_text)
 
-            logger.debug(f"Reranking {len(candidate_texts)} result(s)")
+            logger.info(f"Reranking: Processing {len(candidate_texts)} candidate chunks")
 
             # Get reranked texts
+            logger.debug("Reranking: Calling cross-encoder reranker...")
             reranked_texts = self.reranker.rerank(
                 question,
                 candidate_texts,
                 top_k=len(results),
             )
+            logger.info(f"Reranking: Cross-encoder returned {len(reranked_texts)} reranked results")
 
             # Map reranked texts back to original metadata
             # by matching text content
@@ -235,9 +250,10 @@ class RetrieverService:
                     if ranked_text == original_text:
                         metadata, original_score = results[idx]
                         reranked_results.append((metadata, original_score))
+                        logger.debug(f"Reranking: Mapped result {idx+1} with original score {original_score:.4f}")
                         break
 
-            logger.debug(f"Reranking complete. Returned {len(reranked_results)} results")
+            logger.info(f"Reranking complete. Returned {len(reranked_results)} results in reranked order")
 
             return reranked_results
 

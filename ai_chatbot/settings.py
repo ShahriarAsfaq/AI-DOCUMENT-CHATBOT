@@ -135,6 +135,7 @@ REST_FRAMEWORK = {
 
 # FAISS / OpenAI related
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
+HUGGINGFACE_TOKEN = env('HUGGINGFACE_TOKEN', default='')
 
 # path or settings for vector store if needed
 VECTOR_STORE_PATH = BASE_DIR / 'vectors'
@@ -154,41 +155,51 @@ def get_or_create_chat_service():
         return CHAT_SERVICE
     
     try:
-        from ai_chatbot.rag.llm_service import MockLLMService
+        from ai_chatbot.rag.llm_service import HuggingFaceLLMService
         from ai_chatbot.rag.vector_store import FaissVectorStore
         from ai_chatbot.rag.retriever import create_retriever
         from ai_chatbot.rag.chat_service import create_chat_service
         import os
         
-        # For now, use mock LLM for testing
-        # To use OpenAI instead:
-        # from ai_chatbot.rag.llm_service import OpenAILLMService
-        # llm_service = OpenAILLMService(api_key=OPENAI_API_KEY)
+        # Use HuggingFace LLM service (requires HUGGINGFACE_TOKEN in .env)
+        if not HUGGINGFACE_TOKEN:
+            raise ValueError("HUGGINGFACE_TOKEN environment variable is required")
         
-        llm_service = MockLLMService()
+        llm_service = HuggingFaceLLMService(token=HUGGINGFACE_TOKEN, model="HuggingFaceH4/zephyr-7b-alpha")
         
-        # Initialize vector store (empty for now - will be populated via API)
+        # Initialize vector store
         vector_store = FaissVectorStore()
         
-        # Try to load existing vector store if available
-        vector_store_path = VECTOR_STORE_PATH
-        if os.path.exists(vector_store_path / "faiss.index"):
+        # Try to load processed vector store first
+        processed_store_path = VECTOR_STORE_PATH / "faiss_store"
+        if os.path.exists(processed_store_path / "faiss.index"):
             try:
-                vector_store.load_index(str(vector_store_path))
+                vector_store.load_index(str(processed_store_path))
+                import logging
+                logging.info(f"Loaded processed vector store with {vector_store.get_index_size()} documents")
             except Exception as e:
                 import logging
-                logging.warning(f"Could not load vector store: {e}")
-                # Create empty vector store with dummy data for testing
-                import numpy as np
-                dummy_embeddings = np.random.randn(1, 384).astype(np.float32)
-                dummy_metadata = [{"page": 1, "source": "test.pdf", "chunk_text": "Sample document content"}]
-                vector_store.build_index(dummy_embeddings, dummy_metadata)
-        else:
-            # Create empty vector store with dummy data for testing
-            import numpy as np
-            dummy_embeddings = np.random.randn(1, 384).astype(np.float32)
-            dummy_metadata = [{"page": 1, "source": "test.pdf", "chunk_text": "Sample document content"}]
-            vector_store.build_index(dummy_embeddings, dummy_metadata)
+                logging.warning(f"Could not load processed vector store: {e}")
+                vector_store = FaissVectorStore()  # Reset
+        
+        # If no processed store, try to load legacy vector store
+        if vector_store.get_index_size() == 0:
+            vector_store_path = VECTOR_STORE_PATH
+            if os.path.exists(vector_store_path / "faiss.index"):
+                try:
+                    vector_store.load_index(str(vector_store_path))
+                    import logging
+                    logging.info(f"Loaded legacy vector store with {vector_store.get_index_size()} documents")
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Could not load legacy vector store: {e}")
+        
+        # If still no vector store, fail (no dummy data)
+        if vector_store.get_index_size() == 0:
+            raise ValueError(
+                "No vector store found. Run 'python manage.py process_documents' "
+                "to process uploaded documents and build the vector store."
+            )
         
         # Create retriever
         retriever = create_retriever(vector_store, use_reranking=False, top_k=3)
@@ -208,3 +219,48 @@ def get_or_create_chat_service():
 
 # Initialize ChatService on startup
 CHAT_SERVICE = get_or_create_chat_service()
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'rag_retrieval.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'ai_chatbot.rag': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'ai_chatbot.chat': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

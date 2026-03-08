@@ -32,7 +32,7 @@ class ChatService:
         llm_service,  # OpenAI or similar service
         context_threshold: float = 0.65,
         min_keywords_in_context: int = 1,
-        similarity_threshold: float = 0.5,  # For deduplication check
+        similarity_threshold: float = 0.3,  # Min cosine similarity to include result (higher = more restrictive)
     ):
         """Initialize the chat service.
 
@@ -41,7 +41,7 @@ class ChatService:
             llm_service: LLM service (OpenAI, etc.) with generate() method.
             context_threshold: Minimum similarity to consider for LLM.
             min_keywords_in_context: Min question keywords required in context.
-            similarity_threshold: Min similarity score to include result.
+            similarity_threshold: Min cosine similarity to include result (higher = more restrictive).
         """
         self.retriever = retriever
         self.llm_service = llm_service
@@ -102,7 +102,7 @@ class ChatService:
             filtered_chunks = [
                 (metadata, score)
                 for metadata, score in retrieved_chunks
-                if score <= self.similarity_threshold
+                if score >= self.similarity_threshold
             ]
 
             if not filtered_chunks:
@@ -121,12 +121,14 @@ class ChatService:
                 f"Retrieved {len(filtered_chunks)} chunk(s) after filtering"
             )
 
-            # Step 2: Prepare context and validate
+            # RAG Step 2: Prepare context and validate
+            logger.info("RAG Step 2: Preparing and validating context...")
             sources = [metadata for metadata, _ in filtered_chunks]
             scores = [score for _, score in filtered_chunks]
 
             # Combine context
             context = self._combine_context(sources)
+            context_length = len(context.split()) if context.strip() else 0
 
             if not context.strip():
                 logger.warning("Combined context is empty")
@@ -137,7 +139,10 @@ class ChatService:
                     used_fallback=True,
                 )
 
-            # Step 3: Validate context before LLM
+            logger.info(f"Combined context: {context_length} words from {len(sources)} sources")
+
+            # RAG Step 3: Validate context before LLM
+            logger.info("RAG Step 3: Validating context quality...")
             if not should_answer_with_llm(
                 context,
                 question,
@@ -145,7 +150,7 @@ class ChatService:
                 similarity_threshold=self.context_threshold,
                 min_keywords=self.min_keywords_in_context,
             ):
-                logger.warning("Context validation failed")
+                logger.warning("Context validation failed - insufficient quality or relevance")
                 return self._create_fallback_response(
                     question,
                     sources,
@@ -153,20 +158,25 @@ class ChatService:
                     used_fallback=True,
                 )
 
-            logger.info("Context validation passed. Proceeding to LLM")
+            logger.info("Context validation passed. Proceeding to LLM generation")
 
-            # Step 4: Build prompt
+            # RAG Step 4: Build prompt
+            logger.info("RAG Step 4: Building LLM prompt...")
             prompts = build_prompt(question, context)
+            logger.debug(f"Built prompts: system ({len(prompts.get('system', ''))} chars), user ({len(prompts.get('user', ''))} chars)")
 
-            # Step 5: Call LLM with deterministic settings
-            logger.debug("Calling LLM with deterministic settings")
+            # RAG Step 5: Call LLM with deterministic settings
+            logger.info("RAG Step 5: Generating answer with LLM...")
             answer = self._call_llm_deterministic(
                 question,
                 context,
                 prompts,
             )
+            answer_length = len(answer.split()) if answer else 0
+            logger.info(f"LLM generated answer: {answer_length} words")
 
-            # Step 6: Create response
+            # RAG Step 6: Create response
+            logger.info("RAG Step 6: Creating final response...")
             return self._create_success_response(
                 question=question,
                 answer=answer,
@@ -197,7 +207,10 @@ class ChatService:
         """
         try:
             # Deterministic settings: temperature=0, do_sample=False
-            logger.debug("Calling LLM with temperature=0, do_sample=False")
+            logger.debug("LLM Call: Using deterministic settings (temperature=0.0, do_sample=False, max_tokens=500)")
+
+            logger.debug(f"LLM Call: System prompt length: {len(prompts.get('system', ''))} characters")
+            logger.debug(f"LLM Call: User prompt length: {len(prompts.get('user', ''))} characters")
 
             answer = self.llm_service.generate(
                 system_prompt=prompts["system"],
@@ -208,10 +221,10 @@ class ChatService:
             )
 
             if not answer or not answer.strip():
-                logger.warning("LLM returned empty answer")
+                logger.warning("LLM returned empty or whitespace-only answer")
                 return get_fallback_message()
 
-            logger.info("LLM generated answer successfully")
+            logger.info(f"LLM call successful. Answer length: {len(answer)} characters")
             return answer
 
         except Exception as e:

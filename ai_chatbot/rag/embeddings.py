@@ -1,83 +1,21 @@
 """Embedding service for generating text embeddings.
 
-Uses SentenceTransformer if available, otherwise falls back to lightweight mock implementation.
+Uses SentenceTransformer for real embeddings. No mock fallbacks.
 Automatic device detection (CPU/CUDA) and singleton pattern.
 """
 
 import logging
 from typing import List
-import hashlib
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
-class MockEmbeddingService:
-    """Lightweight mock embedding service that doesn't require torch/transformers."""
-
-    def __init__(self, embedding_dim: int = 384):
-        """Initialize mock embedding service.
-
-        Args:
-            embedding_dim: Dimension of embedding vectors (default: 384 to match SentenceTransformer)
-        """
-        self.embedding_dim = embedding_dim
-        logger.info(f"Using MockEmbeddingService with dimension {embedding_dim}")
-
-    def encode(self, texts: List[str], convert_to_numpy: bool = True) -> np.ndarray:
-        """Generate mock embeddings based on text hash.
-
-        Args:
-            texts: List of texts to embed
-            convert_to_numpy: Whether to convert to numpy (always True for mock)
-
-        Returns:
-            Numpy array of shape (len(texts), embedding_dim)
-        """
-        if not texts:
-            raise ValueError("texts list cannot be empty")
-
-        embeddings = []
-
-        for text in texts:
-            # Use hash-based deterministic embedding
-            if not isinstance(text, str):
-                text = str(text)
-
-            hash_obj = hashlib.md5(text.encode())
-            hash_bytes = hash_obj.digest()
-
-            # Create a deterministic but varied embedding from the hash
-            embedding = np.zeros(self.embedding_dim, dtype=np.float32)
-
-            # Use hash bytes to seed the embedding
-            for i in range(0, len(hash_bytes), 4):
-                chunk = hash_bytes[i : i + 4]
-                value = int.from_bytes(chunk, byteorder="little") / (2**32)
-                idx = i // 4
-                if idx < self.embedding_dim:
-                    embedding[idx] = (value - 0.5) * 2  # Range: -1 to 1
-
-            # Normalize to unit vector
-            norm = np.linalg.norm(embedding)
-            if norm > 0:
-                embedding = embedding / norm
-
-            embeddings.append(embedding)
-
-        return np.array(embeddings, dtype=np.float32)
-
-    def get_sentence_embedding_dimension(self) -> int:
-        """Get embedding dimension."""
-        return self.embedding_dim
-
-
 class EmbeddingService:
-    """Singleton service for generating text embeddings.
+    """Singleton service for generating text embeddings using SentenceTransformer.
 
-    Uses sentence-transformers/all-MiniLM-L6-v2 model if available,
-    otherwise falls back to MockEmbeddingService.
+    Uses sentence-transformers/all-MiniLM-L6-v2 model.
     """
 
     _instance = None
@@ -111,11 +49,33 @@ class EmbeddingService:
                 f"Model dimension: {cls._model.get_sentence_embedding_dimension()}"
             )
         except (ImportError, Exception) as e:
-            logger.warning(
-                f"Could not load SentenceTransformer: {e}. Using MockEmbeddingService."
-            )
-            cls._model = MockEmbeddingService()
-            cls._device = "cpu"
+            logger.error(f"Failed to load SentenceTransformer: {e}")
+            logger.error("Cannot proceed without real embeddings. Install sentence-transformers and torch.")
+            raise RuntimeError(f"Embedding service initialization failed: {e}")
+
+    @staticmethod
+    def _detect_device() -> str:
+        """Detect available device (CUDA or CPU).
+
+        Returns:
+            Device string: 'cuda' if CUDA is available, else 'cpu'.
+        """
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                device = "cuda"
+                logger.info(
+                    f"CUDA detected. Using GPU: {torch.cuda.get_device_name(0)}"
+                )
+            else:
+                device = "cpu"
+                logger.info("No CUDA detected. Using CPU for embeddings.")
+        except ImportError:
+            device = "cpu"
+            logger.warning("PyTorch not available. Using CPU for embeddings.")
+
+        return device
 
     @staticmethod
     def _detect_device() -> str:
@@ -170,8 +130,13 @@ class EmbeddingService:
             if not isinstance(embeddings, np.ndarray):
                 embeddings = np.array(embeddings, dtype=np.float32)
 
+            # Normalize embeddings for cosine similarity
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms[norms == 0] = 1  # Avoid division by zero
+            embeddings = embeddings / norms
+
             logger.debug(
-                f"Successfully encoded {len(texts)} text(s). "
+                f"Successfully encoded and normalized {len(texts)} text(s). "
                 f"Embedding shape: {embeddings.shape}"
             )
 

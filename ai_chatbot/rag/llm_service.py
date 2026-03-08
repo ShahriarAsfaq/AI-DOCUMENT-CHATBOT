@@ -71,6 +71,103 @@ class OpenAILLMService:
             raise
 
 
+class HuggingFaceLLMService:
+    """HuggingFace-based LLM service for answer generation."""
+
+    def __init__(self, token: str, model: str = "HuggingFaceH4/zephyr-7b-alpha"):
+        """Initialize HuggingFace LLM service.
+
+        Args:
+            token: HuggingFace API token
+            model: Model name (default: HuggingFaceH4/zephyr-7b-alpha)
+        """
+        self.token = token
+        self.model = model
+
+        try:
+            from transformers import AutoTokenizer, AutoModelForCausalLM
+            import torch
+
+            logger.info(f"Loading HuggingFace model: {model}")
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model,
+                token=token,
+                trust_remote_code=True
+            )
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model,
+                token=token,
+                trust_remote_code=True,
+                torch_dtype=torch.float16,
+                device_map="auto"
+            )
+            logger.info(f"HuggingFace LLM service initialized with model: {model}")
+        except Exception as e:
+            logger.error(f"Failed to initialize HuggingFace model: {str(e)}")
+            raise
+
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.0,
+        do_sample: bool = False,
+        max_tokens: int = 500,
+    ) -> str:
+        """Generate answer using HuggingFace model.
+
+        Args:
+            system_prompt: System instruction prompt
+            user_prompt: User query with context
+            temperature: Sampling temperature (0 = deterministic)
+            do_sample: Whether to use sampling
+            max_tokens: Maximum response tokens
+
+        Returns:
+            Generated response text
+        """
+        try:
+            # Combine prompts in chat format
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # Format for the model
+            prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature if temperature > 0 else None,
+                    do_sample=do_sample,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                )
+
+            # Decode the response
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+            # Extract just the assistant's response (remove the input prompt)
+            if prompt in response:
+                answer = response[len(prompt):].strip()
+            else:
+                answer = response.strip()
+
+            logger.debug("HuggingFace response generated successfully")
+            return answer
+
+        except Exception as e:
+            logger.error(f"Error calling HuggingFace model: {str(e)}")
+            raise
+
+
 class MockLLMService:
     """Mock LLM service for testing without API calls."""
 
