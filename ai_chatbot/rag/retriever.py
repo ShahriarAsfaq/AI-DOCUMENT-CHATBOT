@@ -25,7 +25,7 @@ class RetrieverService:
         self,
         vector_store: FaissVectorStore,
         use_reranking: bool = True,
-        top_k: int = 3,
+        top_k: int = 10,
         num_query_variations: int = 5,
     ):
         """Initialize the retriever service.
@@ -121,10 +121,21 @@ class RetrieverService:
             final_results = combined_results[: self.top_k]
 
             logger.info(
-                f"Retrieval complete. Retrieved {len(final_results)} chunk(s). "
-                f"Retrieval result. Retrieved {final_results} . "
-                f"Top score: {final_results[0][1]:.4f}"
+                f"Retrieval complete. Retrieved {len(final_results)} chunk(s)"
             )
+
+            # Log retrieved chunks for debugging
+            for i, (metadata, score) in enumerate(final_results):
+                chunk_text = metadata.get('chunk_text', '').strip()
+                if chunk_text:
+                    text_preview = chunk_text[:100].replace('\n', ' ')
+                    logger.debug(
+                        f"Retrieved chunk {i+1}: score={score:.4f}, "
+                        f"source='{metadata.get('source', 'unknown')}', "
+                        f"page={metadata.get('page', 'unknown')} - '{text_preview}...'"
+                    )
+                else:
+                    logger.warning(f"Retrieved chunk {i+1} has empty chunk_text: {metadata}")
 
             return final_results
 

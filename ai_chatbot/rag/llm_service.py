@@ -85,25 +85,16 @@ class HuggingFaceLLMService:
         self.model = model
 
         try:
-            from transformers import AutoTokenizer, AutoModelForCausalLM
-            import torch
+            from huggingface_hub import InferenceClient
 
-            logger.info(f"Loading HuggingFace model: {model}")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model,
-                token=token,
-                trust_remote_code=True
+            logger.info(f"Initializing HuggingFace Inference API for model: {model}")
+            self.client = InferenceClient(
+                model=model,
+                token=token
             )
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model,
-                token=token,
-                trust_remote_code=True,
-                torch_dtype=torch.float16,
-                device_map="auto"
-            )
-            logger.info(f"HuggingFace LLM service initialized with model: {model}")
+            logger.info(f"HuggingFace Inference API initialized successfully for: {model}")
         except Exception as e:
-            logger.error(f"Failed to initialize HuggingFace model: {str(e)}")
+            logger.error(f"Failed to initialize HuggingFace Inference API: {str(e)}")
             raise
 
     def generate(
@@ -127,44 +118,91 @@ class HuggingFaceLLMService:
             Generated response text
         """
         try:
-            # Combine prompts in chat format
+            # Format messages for chat API
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
 
-            # Format for the model
-            prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True
+            logger.debug(f"Calling HuggingFace Inference API with {len(user_prompt)} char context")
+
+            # Call the inference API
+            response = self.client.chat_completion(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
 
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+            # Extract the answer from response
+            answer = response.choices[0].message.content.strip()
 
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_tokens,
-                    temperature=temperature if temperature > 0 else None,
-                    do_sample=do_sample,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                )
-
-            # Decode the response
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-            # Extract just the assistant's response (remove the input prompt)
-            if prompt in response:
-                answer = response[len(prompt):].strip()
-            else:
-                answer = response.strip()
-
-            logger.debug("HuggingFace response generated successfully")
+            logger.debug("HuggingFace Inference API response generated successfully")
             return answer
 
         except Exception as e:
-            logger.error(f"Error calling HuggingFace model: {str(e)}")
+            logger.error(f"Error calling HuggingFace Inference API: {str(e)}")
+            raise
+
+
+class GroqLLMService:
+    """Groq-based LLM service using llama-3.1-8b-instant model."""
+
+    def __init__(self, api_key: str, model: str = "llama-3.1-8b-instant"):
+        """Initialize Groq LLM service.
+
+        Args:
+            api_key: Groq API key
+            model: Model name (default: llama-3.1-8b-instant)
+        """
+        self.api_key = api_key
+        self.model = model
+
+        try:
+            from groq import Groq
+
+            self.client = Groq(api_key=api_key)
+            logger.info(f"Groq LLM service initialized with model: {model}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Groq: {str(e)}")
+            raise
+
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.0,
+        do_sample: bool = False,
+        max_tokens: int = 500,
+    ) -> str:
+        """Generate answer using Groq API.
+
+        Args:
+            system_prompt: System instruction prompt
+            user_prompt: User query with context
+            temperature: Sampling temperature (0 = deterministic)
+            do_sample: Whether to use sampling
+            max_tokens: Maximum response tokens
+
+        Returns:
+            Generated response text
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            answer = response.choices[0].message.content.strip()
+            logger.debug("Groq response generated successfully")
+            return answer
+
+        except Exception as e:
+            logger.error(f"Error calling Groq API: {str(e)}")
             raise
 
 

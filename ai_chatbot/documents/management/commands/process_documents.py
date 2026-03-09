@@ -4,13 +4,17 @@ from ai_chatbot.documents.models import Document
 from ai_chatbot.rag.document_loader import load_document
 from ai_chatbot.rag.chunker import split_into_chunks
 from ai_chatbot.rag.document import Document as RagDocument
-from ai_chatbot.rag.utils import get_vector_store
+from ai_chatbot.rag.embeddings import get_embedding_service
+from ai_chatbot.rag.vector_store import FaissVectorStore
 import os
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Process uploaded documents and build vector store'
+    help = 'Process uploaded documents and build vector store with robust RAG pipeline'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -20,7 +24,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write('Processing documents and building vector store...')
+        self.stdout.write('Processing documents and building vector store with robust RAG pipeline...')
 
         # Get all uploaded documents
         documents = Document.objects.all()
@@ -29,8 +33,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('No documents found to process'))
             return
 
-        all_texts = []
-        all_metadata = []
+        all_chunks = []
+        total_pages = 0
+        total_valid_chunks = 0
+
+        # 1. DOCUMENT LOADING
+        self.stdout.write('Step 1: Loading and extracting text from documents...')
 
         for doc in documents:
             try:
@@ -43,8 +51,17 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f'File not found: {file_path}'))
                     continue
 
-                # Load document
+                # Load document with OCR fallback
                 doc_pages = load_document(str(file_path))
+                total_pages += len(doc_pages)
+
+                self.stdout.write(f'  - Extracted {len(doc_pages)} pages')
+
+                # Log page content lengths
+                for i, page in enumerate(doc_pages):
+                    content_length = len(page.page_content.strip())
+                    extraction_method = page.metadata.get('extraction_method', 'unknown')
+                    self.stdout.write(f'    Page {i+1}: {content_length} chars ({extraction_method})')
 
                 # Convert to RagDocument objects for chunking
                 rag_docs = []
@@ -54,33 +71,85 @@ class Command(BaseCommand):
                         metadata=page_doc.metadata
                     ))
 
-                # Chunk the documents
-                chunks = split_into_chunks(rag_docs, chunk_size=800, chunk_overlap=200)
+                # 4. CHUNKING with RecursiveCharacterTextSplitter
+                self.stdout.write('Step 4: Chunking documents...')
+                chunks = split_into_chunks(rag_docs, chunk_size=500, chunk_overlap=100)
 
+                # 5. CHUNK VALIDATION
+                valid_chunks = []
                 for chunk in chunks:
-                    all_texts.append(chunk.page_content)
-                    all_metadata.append({
-                        'source': doc.title,
-                        'page': chunk.metadata.get('page', 1),
-                        'chunk_text': chunk.page_content,
-                        'document_id': doc.id,
-                    })
+                    if len(chunk.page_content.strip()) >= 20:  # Minimum meaningful content
+                        valid_chunks.append(chunk)
+                        all_chunks.append({
+                            'text': chunk.page_content,
+                            'metadata': {
+                                'source': doc.title,
+                                'page': chunk.metadata.get('page', 1),
+                                'chunk_text': chunk.page_content,
+                                'document_id': doc.id,
+                                'chunk_index': chunk.metadata.get('chunk_index', 0),
+                            }
+                        })
 
-                self.stdout.write(f'  - Processed {len(doc_pages)} pages, created {len(chunks)} chunks')
+                total_valid_chunks += len(valid_chunks)
+                self.stdout.write(f'  - Created {len(valid_chunks)} valid chunks from {len(chunks)} raw chunks')
 
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f'Error processing {doc.title}: {str(e)}'))
+                logger.exception(f"Error processing document {doc.title}")
                 continue
 
-        if not all_texts:
-            self.stdout.write(self.style.ERROR('No text content extracted from documents'))
+        if not all_chunks:
+            self.stdout.write(self.style.ERROR('No valid chunks created from documents'))
             return
 
-        self.stdout.write(f'Building vector store with {len(all_texts)} chunks...')
-
-        # Build vector store
+        # 6. EMBEDDING
+        self.stdout.write('Step 6: Generating embeddings...')
         try:
-            vector_store = get_vector_store(all_texts, all_metadata, persist=True)
-            self.stdout.write(self.style.SUCCESS(f'Successfully built vector store with {len(all_texts)} chunks'))
+            embedding_service = get_embedding_service()
+
+            texts = [chunk['text'] for chunk in all_chunks]
+            embeddings = embedding_service.encode(texts)
+
+            self.stdout.write(f'  - Generated embeddings for {len(texts)} chunks')
+
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'Error generating embeddings: {str(e)}'))
+            return
+
+        # 7. VECTOR DATABASE
+        self.stdout.write('Step 7: Building vector store...')
+
+        try:
+            vector_store = FaissVectorStore()
+
+            # Prepare metadata
+            metadata_list = [chunk['metadata'] for chunk in all_chunks]
+
+            # Build index
+            vector_store.build_index(embeddings, metadata_list)
+
+            # Save to processed store
+            processed_store_path = Path(settings.VECTOR_STORE_PATH) / "faiss_store"
+            vector_store.save_index(str(processed_store_path))
+
+            self.stdout.write(self.style.SUCCESS(
+                f'Successfully built vector store with {len(all_chunks)} chunks '
+                f'from {total_pages} pages across {len(documents)} documents'
+            ))
+
+            # 10. DEBUGGING - Log summary
+            logger.info("RAG Pipeline Summary:")
+            logger.info(f"  - Documents processed: {len(documents)}")
+            logger.info(f"  - Total pages extracted: {total_pages}")
+            logger.info(f"  - Valid chunks created: {total_valid_chunks}")
+            logger.info(f"  - Vector store size: {vector_store.get_index_size()}")
+
+            # Log first 3 chunks as examples
+            for i, chunk in enumerate(all_chunks[:3]):
+                text_preview = chunk['text'][:150].replace('\n', ' ')
+                logger.info(f"  - Sample chunk {i+1}: '{text_preview}...'")
+
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'Error building vector store: {str(e)}'))
+            logger.exception("Error building vector store")

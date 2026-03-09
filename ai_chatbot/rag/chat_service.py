@@ -98,10 +98,24 @@ class ChatService:
                     used_fallback=True,
                 )
 
+            # DEDUPLICATION: Remove duplicate chunks
+            logger.info(f"Retrieved {len(retrieved_chunks)} raw chunks, deduplicating...")
+            deduplicated_chunks = self._deduplicate_chunks(retrieved_chunks)
+            logger.info(f"After deduplication: {len(deduplicated_chunks)} unique chunks")
+
+            if not deduplicated_chunks:
+                logger.warning("No chunks after deduplication")
+                return self._create_fallback_response(
+                    question,
+                    [],
+                    [],
+                    used_fallback=True,
+                )
+
             # Filter chunks by similarity threshold
             filtered_chunks = [
                 (metadata, score)
-                for metadata, score in retrieved_chunks
+                for metadata, score in deduplicated_chunks
                 if score >= self.similarity_threshold
             ]
 
@@ -175,8 +189,23 @@ class ChatService:
             answer_length = len(answer.split()) if answer else 0
             logger.info(f"LLM generated answer: {answer_length} words")
 
-            # RAG Step 6: Create response
-            logger.info("RAG Step 6: Creating final response...")
+            # RAG Step 6: Validate LLM answer for hallucinations
+            logger.info("RAG Step 6: Validating LLM answer against context...")
+            is_answer_valid = self._validate_llm_answer(answer, context, question)
+
+            if not is_answer_valid:
+                logger.warning("LLM answer failed validation (possible hallucination)")
+                return self._create_fallback_response(
+                    question,
+                    sources,
+                    scores,
+                    used_fallback=True,
+                )
+
+            logger.info("LLM answer validation passed")
+
+            # RAG Step 7: Create response
+            logger.info("RAG Step 7: Creating final response...")
             return self._create_success_response(
                 question=question,
                 answer=answer,
@@ -188,6 +217,98 @@ class ChatService:
         except Exception as e:
             logger.error(f"Error processing question: {str(e)}")
             raise Exception(f"Failed to answer question: {str(e)}") from e
+
+    def _deduplicate_chunks(
+        self,
+        chunks: List[Tuple[Dict[str, Any], float]],
+    ) -> List[Tuple[Dict[str, Any], float]]:
+        """Remove duplicate chunks from retrieved results.
+
+        Chunks are considered duplicates if they have the same chunk_text.
+        When duplicates exist, keeps the one with better score.
+
+        Args:
+            chunks: List of (metadata, score) tuples.
+
+        Returns:
+            List of deduplicated (metadata, score) tuples.
+        """
+        seen_texts = {}  # chunk_text -> (metadata, score)
+
+        for metadata, score in chunks:
+            chunk_text = metadata.get("chunk_text", "").strip()
+
+            if not chunk_text:
+                logger.debug("Skipping chunk with empty text")
+                continue
+
+            # Use chunk_text as unique key
+            if chunk_text not in seen_texts:
+                seen_texts[chunk_text] = (metadata, score)
+            else:
+                # Keep chunk with better (lower) score
+                existing_metadata, existing_score = seen_texts[chunk_text]
+                if score < existing_score:
+                    logger.debug(f"Replacing duplicate: score {existing_score:.4f} -> {score:.4f}")
+                    seen_texts[chunk_text] = (metadata, score)
+
+        deduplicated = list(seen_texts.values())
+        logger.debug(f"Deduplication: {len(chunks)} -> {len(deduplicated)} chunks")
+
+        return deduplicated
+
+    def _validate_llm_answer(
+        self,
+        answer: str,
+        context: str,
+        question: str,
+    ) -> bool:
+        """Validate LLM answer against context for hallucinations.
+
+        Performs basic sanity checks to detect suspicious responses:
+        - Answer must not be empty or too short
+        - Answer should not be ONLY the fallback message
+        - Answer length should be reasonable relative to context
+
+        Args:
+            answer: LLM-generated answer.
+            context: Retrieved context used for answering.
+            question: Original user question.
+
+        Returns:
+            True if answer seems reasonable, False if suspicious.
+        """
+        if not answer or not isinstance(answer, str):
+            logger.warning("Invalid answer for validation")
+            return False
+
+        answer_clean = answer.strip()
+
+        # Check 1: Answer must have meaningful content (not just whitespace)
+        if len(answer_clean) < 20:
+            logger.warning(f"Answer too short: {len(answer_clean)} characters")
+            return False
+
+        # Check 2: Answer should not be ONLY the fallback message
+        # (OK if fallback is part of a larger response, but not if it's the entire answer)
+        fallback_msg = "This information is not present in the provided document."
+        if answer_clean == fallback_msg:
+            logger.warning("Answer is ONLY the fallback message")
+            return False
+
+        # Check 3: Sanity check on length - answer shouldn't be unreasonably long
+        answer_words = len(answer_clean.split())
+        context_words = len(context.split())
+
+        # Allow answer to be up to 5x context length (reasonable elaboration)
+        if answer_words > context_words * 5:
+            logger.warning(
+                f"Answer suspiciously long: {answer_words} words vs {context_words} context words"
+            )
+            return False
+
+        logger.debug(f"LLM answer validation passed - {answer_words} words, grounded response")
+        return True
 
     def _call_llm_deterministic(
         self,
@@ -233,7 +354,7 @@ class ChatService:
             return get_fallback_message()
 
     def _combine_context(self, sources: List[Dict[str, Any]]) -> str:
-        """Combine multiple source chunks into single context.
+        """Combine multiple source chunks into single context with validation.
 
         Args:
             sources: List of metadata dicts.
@@ -242,6 +363,7 @@ class ChatService:
             Combined context string.
         """
         contexts = []
+        valid_sources = 0
 
         for idx, source in enumerate(sources, 1):
             # Try to get chunk content from metadata
@@ -250,13 +372,26 @@ class ChatService:
                 # Fallback: construct from metadata
                 chunk_text = source.get("chunk_text", "")
 
-            if chunk_text:
-                contexts.append(chunk_text)
-        
+            # Validate chunk_text
+            if chunk_text and isinstance(chunk_text, str):
+                cleaned_text = chunk_text.strip()
+                if len(cleaned_text) >= 10:  # Minimum meaningful content
+                    contexts.append(cleaned_text)
+                    valid_sources += 1
+                    logger.debug(f"Added valid chunk {idx}: {len(cleaned_text)} chars")
+                else:
+                    logger.warning(f"Skipping chunk {idx}: too short ({len(cleaned_text)} chars)")
+            else:
+                logger.warning(f"Skipping chunk {idx}: empty or invalid chunk_text")
+
         combined = "\n\n".join(contexts)
-        logger.debug(
-            f"Combined {len(sources)} source(s) into {len(combined)} chars"
-        )
+
+        if not combined.strip():
+            logger.warning("Combined context is empty - no valid chunks found")
+        else:
+            logger.debug(
+                f"Combined {valid_sources} valid source(s) into {len(combined)} chars"
+            )
 
         return combined
 
@@ -336,6 +471,7 @@ def create_chat_service(
     retriever: RetrieverService,
     llm_service,
     context_threshold: float = 0.65,
+    similarity_threshold: float = 0.1,  # Lower threshold for better retrieval
 ) -> ChatService:
     """Factory function to create ChatService.
 
@@ -343,6 +479,7 @@ def create_chat_service(
         retriever: Initialized RetrieverService.
         llm_service: LLM service for generation.
         context_threshold: Minimum context similarity threshold.
+        similarity_threshold: Minimum similarity for chunk filtering.
 
     Returns:
         ChatService instance.
@@ -351,4 +488,5 @@ def create_chat_service(
         retriever=retriever,
         llm_service=llm_service,
         context_threshold=context_threshold,
+        similarity_threshold=similarity_threshold,
     )

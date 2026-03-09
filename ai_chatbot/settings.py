@@ -136,6 +136,7 @@ REST_FRAMEWORK = {
 # FAISS / OpenAI related
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 HUGGINGFACE_TOKEN = env('HUGGINGFACE_TOKEN', default='')
+GROQ_API_KEY = env('GROQ_API_KEY', default='')
 
 # path or settings for vector store if needed
 VECTOR_STORE_PATH = BASE_DIR / 'vectors'
@@ -155,17 +156,17 @@ def get_or_create_chat_service():
         return CHAT_SERVICE
     
     try:
-        from ai_chatbot.rag.llm_service import HuggingFaceLLMService
+        from ai_chatbot.rag.llm_service import GroqLLMService
         from ai_chatbot.rag.vector_store import FaissVectorStore
         from ai_chatbot.rag.retriever import create_retriever
         from ai_chatbot.rag.chat_service import create_chat_service
         import os
         
-        # Use HuggingFace LLM service (requires HUGGINGFACE_TOKEN in .env)
-        if not HUGGINGFACE_TOKEN:
-            raise ValueError("HUGGINGFACE_TOKEN environment variable is required")
+        # Use Groq LLM service with llama-3.1-8b-instant (requires GROQ_API_KEY in .env)
+        if not GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY environment variable is required")
         
-        llm_service = HuggingFaceLLMService(token=HUGGINGFACE_TOKEN, model="HuggingFaceH4/zephyr-7b-alpha")
+        llm_service = GroqLLMService(api_key=GROQ_API_KEY, model="llama-3.1-8b-instant")
         
         # Initialize vector store
         vector_store = FaissVectorStore()
@@ -201,11 +202,15 @@ def get_or_create_chat_service():
                 "to process uploaded documents and build the vector store."
             )
         
-        # Create retriever
-        retriever = create_retriever(vector_store, use_reranking=False, top_k=3)
+        # Create retriever with reranking enabled and a higher top_k
+        retriever = create_retriever(vector_store, use_reranking=True, top_k=10)
         
-        # Create chat service
-        CHAT_SERVICE = create_chat_service(retriever, llm_service)
+        # Create chat service with lower hallucination/context threshold
+        CHAT_SERVICE = create_chat_service(
+            retriever,
+            llm_service,
+            context_threshold=0.15,
+        )
         
         import logging
         logging.info("ChatService initialized successfully")

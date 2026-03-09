@@ -141,10 +141,10 @@ def validate_context_quality(
     similarity_threshold: float = 0.65,
     min_keywords: int = 1,
 ) -> Tuple[bool, str]:
-    """Comprehensive context validation (similarity + keywords).
+    """Comprehensive context validation with flexible fallback logic.
 
-    Performs both similarity threshold and keyword validation
-    to ensure context is sufficient before LLM processing.
+    Uses AND logic for fallback: only rejects if BOTH similarity is poor AND
+    no keywords match. Otherwise proceeds if either is good.
 
     Args:
         context: Retrieved context/passage to validate.
@@ -154,32 +154,63 @@ def validate_context_quality(
         min_keywords: Minimum keywords required in context. Default: 1.
 
     Returns:
-        Tuple of (is_valid, message) where both checks must pass.
-        Returns fallback message if any check fails.
+        Tuple of (is_valid, message) where:
+        - is_valid: True if context should be used (similarity >= threshold OR keywords match)
+        - message: Result message
 
     Raises:
         ValueError: If inputs are invalid.
     """
-    # Check similarity score if provided
+    # Check similarity score
+    similar_enough = True
     if similarity_score is not None:
-        is_score_valid, score_msg = check_similarity_threshold(
-            similarity_score,
-            similarity_threshold,
+        similar_enough = similarity_score >= similarity_threshold
+        logger.info(
+            f"Similarity check: score={similarity_score:.4f}, threshold={similarity_threshold:.4f}, "
+            f"valid={similar_enough}"
         )
-        if not is_score_valid:
-            return False, INSUFFICIENT_CONTEXT_MESSAGE
+        if not similar_enough:
+            logger.warning(
+                f"Similarity score ({similarity_score:.4f}) below threshold ({similarity_threshold:.4f})"
+            )
 
     # Check keywords in context
-    is_keywords_valid, keywords_msg = validate_context_contains_keywords(
-        context,
-        question,
-        min_keywords,
-    )
+    keywords = _extract_keywords(question)
+    keywords_match = True
 
-    if not is_keywords_valid:
+    if keywords:
+        context_lower = context.lower()
+        matching_keywords = []
+
+        for keyword in keywords:
+            pattern = r"\b" + re.escape(keyword) + r"\b"
+            if re.search(pattern, context_lower):
+                matching_keywords.append(keyword)
+
+        keywords_match = len(matching_keywords) >= min_keywords
+
+        logger.info(
+            f"Keyword validation: found {len(matching_keywords)}/{len(keywords)} keywords "
+            f"(required: {min_keywords}). Matching: {matching_keywords}"
+        )
+
+        if not keywords_match:
+            logger.warning(
+                f"Context missing required keywords. "
+                f"Found: {matching_keywords}, Required: {min_keywords}"
+            )
+    else:
+        logger.debug("No meaningful keywords extracted from question")
+
+    # NEW LOGIC: Fallback only if BOTH similarity is bad AND no keywords match
+    # Otherwise proceed if at least one is good
+    should_answer = similar_enough or keywords_match
+
+    if not should_answer:
+        logger.warning("Failed validation: poor similarity AND no keyword matches")
         return False, INSUFFICIENT_CONTEXT_MESSAGE
 
-    logger.info("Full context quality validation passed")
+    logger.info("Context validation passed (similarity good OR keywords match)")
     return True, "OK"
 
 

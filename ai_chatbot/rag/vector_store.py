@@ -199,6 +199,8 @@ class FaissVectorStore:
             for idx in indices[0]:
                 if 0 <= idx < len(self.metadata_list):
                     results.append(self.metadata_list[idx].copy())
+                else:
+                    logger.warning(f"Invalid index {idx} returned by FAISS search")
 
             logger.debug(f"Similarity search returned {len(results)} result(s)")
             return results
@@ -212,19 +214,62 @@ class FaissVectorStore:
     def similarity_search_with_score(
         self, query_embedding: np.ndarray, k: int = 5
     ) -> List[Tuple[dict, float]]:
-        """Search for k most similar vectors with distances.
+        """Search for k most similar vectors with scores.
 
         Args:
             query_embedding: Query vector of shape (embedding_dim,) or (1, embedding_dim).
             k: Number of results to return.
 
         Returns:
-            List of tuples (metadata_dict, distance) ordered by similarity (ascending distance).
+            List of (metadata_dict, score) tuples for k most similar vectors,
+            ordered by similarity (lower score = more similar).
 
         Raises:
             ValueError: If index not built or query dimension mismatch.
             Exception: For search failures.
         """
+        if self.index is None:
+            raise ValueError("Index has not been built or loaded.")
+
+        try:
+            # Reshape if needed
+            if query_embedding.ndim == 1:
+                query_embedding = query_embedding.reshape(1, -1)
+
+            if query_embedding.dtype != np.float32:
+                query_embedding = query_embedding.astype(np.float32)
+
+            if query_embedding.shape[1] != self.dimension:
+                raise ValueError(
+                    f"Query dimension ({query_embedding.shape[1]}) does not match "
+                    f"index dimension ({self.dimension})"
+                )
+
+            # Search
+            distances, indices = self.index.search(query_embedding, k)
+
+            # Extract metadata and scores for returned indices
+            results = []
+            for idx, distance in zip(indices[0], distances[0]):
+                if 0 <= idx < len(self.metadata_list):
+                    metadata = self.metadata_list[idx]
+
+                    # Validate chunk_text exists and is not empty
+                    chunk_text = metadata.get('chunk_text', '').strip()
+                    if not chunk_text:
+                        logger.warning(f"Skipping chunk with empty chunk_text: {metadata}")
+                        continue
+
+                    results.append((metadata, float(distance)))
+                else:
+                    logger.warning(f"Invalid index {idx} returned by FAISS search")
+
+            logger.debug(f"Similarity search returned {len(results)} valid results")
+            return results
+
+        except Exception as e:
+            logger.error(f"Error in similarity search: {str(e)}")
+            raise Exception(f"Failed to perform similarity search: {str(e)}") from e
         if self.index is None:
             raise ValueError("Index has not been built or loaded.")
 

@@ -92,19 +92,25 @@ def _build_system_prompt() -> str:
     Returns:
         System prompt string.
     """
-    system_prompt = """You are a helpful assistant that answers questions STRICTLY based on the provided context document.
+    system_prompt = """You are a document-based question answering system. Your ONLY responsibility is to answer questions using information explicitly stated in the provided document.
 
-CRITICAL RULES:
-1. Answer ONLY based on information present in the provided context
-2. Do NOT use external knowledge, training data, or inference
-3. Do NOT guess, infer, or extrapolate beyond what is explicitly stated
-4. If the answer is not found in the context, respond with EXACTLY:
+STRICT RULES - DO NOT BREAK THESE:
+
+1. **USE ONLY THE PROVIDED DOCUMENT**: You must answer EXCLUSIVELY based on information present in the provided context document. No external knowledge. No training data. No inference beyond stated facts.
+
+2. **QUOTE THE DOCUMENT**: When answering, you MUST quote or closely paraphrase directly from the provided context. Include relevant excerpts from the document in your answer to show where the information comes from.
+
+3. **NO INFERENCE OR EXTRAPOLATION**: Do not infer, deduce, or extrapolate beyond what is explicitly written. Even if something seems reasonable or obvious, if it's not in the document, do not mention it.
+
+4. **FALLBACK MESSAGE**: If the answer truly cannot be found in the provided document (even after careful reading), respond with EXACTLY:
    "This information is not present in the provided document."
-5. Be precise and factual - quote or closely paraphrase the context
-6. If the context is unclear or contradictory, acknowledge the ambiguity
-7. NEVER make up information or assume knowledge not in the context
+   Do NOT guess, do NOT provide partial information.
 
-Your responses must be deterministic and grounded only in the provided document."""
+5. **REASONABLE SUMMARIZATION**: You ARE allowed to reasonably summarize, paraphrase, or combine information from multiple places in the document - but only if the core facts are present.
+
+6. **ACKNOWLEDGE AMBIGUITY**: If the context is unclear, contradictory, or incomplete regarding the answer, explicitly say so instead of making assumptions.
+
+Your responses must be grounded entirely in the provided document. Every claim must be traceable back to the source document."""
 
     return system_prompt
 
@@ -120,17 +126,23 @@ def _build_user_prompt(question: str, context: str) -> str:
         User prompt string.
     """
     user_prompt = f"""CONTEXT DOCUMENT:
+===== BEGIN DOCUMENT =====
 {context}
+===== END DOCUMENT =====
 
 QUESTION:
 {question}
 
 INSTRUCTIONS:
-- Answer based ONLY on the above context document
-- If the answer is not in the context, reply with: "{FALLBACK_MESSAGE}"
-- Do not use external knowledge
-- Do not infer beyond stated facts
-- Be direct and concise"""
+1. Use ONLY the information from the context document above
+2. If the answer is found, quote or closely paraphrase relevant parts of the document
+3. Show the connection between your answer and the document text
+4. If the answer is not in the document, reply with: "{FALLBACK_MESSAGE}"
+5. Do NOT use external knowledge, assumptions, or inferences
+6. Do NOT provide partial answers if information is incomplete
+
+IMPORTANT: If the answer can be reasonably inferred from the context, extract and summarize it.
+Only use the fallback message if the document truly does not contain relevant information."""
 
     return user_prompt
 
