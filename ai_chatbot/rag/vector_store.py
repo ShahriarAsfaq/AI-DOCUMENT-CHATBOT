@@ -161,9 +161,49 @@ class FaissVectorStore:
 
         except FileNotFoundError:
             raise
+    def reload_index(self, path: str) -> None:
+        """Reload the FAISS index and metadata from disk.
+
+        This is useful when the index files have been updated externally.
+
+        Args:
+            path: Directory path containing index files (faiss.index, metadata.pkl).
+
+        Raises:
+            FileNotFoundError: If index files do not exist.
+            Exception: For load operation failures.
+        """
+        try:
+            path = Path(path)
+            index_file = path / "faiss.index"
+            metadata_file = path / "metadata.pkl"
+
+            if not index_file.exists():
+                raise FileNotFoundError(f"Index file not found: {index_file}")
+
+            if not metadata_file.exists():
+                raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
+
+            # Load FAISS index
+            self.index = faiss.read_index(str(index_file))
+            logger.info(
+                f"Reloaded FAISS index from {index_file}. "
+                f"Contains {self.index.ntotal} vectors"
+            )
+
+            # Load metadata
+            with open(metadata_file, "rb") as f:
+                data = pickle.load(f)
+                self.metadata_list = data["metadata_list"]
+                self.dimension = data["dimension"]
+
+            logger.info(f"Reloaded metadata from {metadata_file}")
+
+        except FileNotFoundError:
+            raise
         except Exception as e:
-            logger.error(f"Error loading index: {str(e)}")
-            raise Exception(f"Failed to load FAISS index: {str(e)}") from e
+            logger.error(f"Error reloading index: {str(e)}")
+            raise Exception(f"Failed to reload FAISS index: {str(e)}") from e
 
     def similarity_search(
         self, query_embedding: np.ndarray, k: int = 5

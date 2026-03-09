@@ -3,6 +3,7 @@ from rest_framework.response import Response
 import os
 from django.conf import settings
 from django.core.management import call_command
+from pathlib import Path
 
 from .models import Document
 from .serializers import DocumentSerializer
@@ -42,6 +43,18 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 print("Processing new document to rebuild vector store...")
                 call_command('process_documents')
                 print("Vector store rebuilt successfully")
+
+                # Reload the vector store in the chat service
+                try:
+                    from ai_chatbot.chat.views import get_chat_service
+                    chat_service = get_chat_service()
+                    if chat_service and hasattr(chat_service, 'retriever') and hasattr(chat_service.retriever, 'vector_store'):
+                        processed_store_path = Path(settings.VECTOR_STORE_PATH) / "faiss_store"
+                        chat_service.retriever.vector_store.reload_index(str(processed_store_path))
+                        print("Vector store reloaded in chat service")
+                except Exception as reload_error:
+                    print(f"Warning: Failed to reload vector store in chat service: {reload_error}")
+
             except Exception as e:
                 print(f"Warning: Failed to process document: {e}")
                 # Don't fail the upload if processing fails
