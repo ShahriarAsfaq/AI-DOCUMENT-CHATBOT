@@ -4,6 +4,7 @@ interface ChatMessage {
   id: string;
   question: string;
   answer: string;
+  citations: string;
   sources: Array<{
     page: number;
     source: string;
@@ -19,6 +20,7 @@ interface ChatMessage {
 interface ChatResponse {
   success: boolean;
   answer: string;
+  citations: string;
   question: string;
   sources: Array<{
     page: number;
@@ -120,11 +122,12 @@ const App: React.FC = () => {
 
       const data: ChatResponse = await response.json();
 
-      if (response.ok && data.success) {
+      if (response.ok) {
         const newMessage: ChatMessage = {
           id: Date.now().toString(),
           question: data.question,
           answer: data.answer,
+          citations: data.citations,
           sources: data.sources,
           similarity_scores: data.similarity_scores,
           context_count: data.context_count,
@@ -207,6 +210,16 @@ const App: React.FC = () => {
                   <div className="flex justify-start">
                     <div className="bg-gray-100 rounded-lg px-4 py-3 max-w-2xl">
                       <div className="text-gray-900 mb-3">{message.answer}</div>
+
+                      {/* Citations */}
+                      {message.citations && message.citations.trim() && (
+                        <div className="mb-3 p-3 bg-blue-50 border-l-4 border-blue-400">
+                          <h4 className="text-sm font-semibold text-blue-800 mb-2">Citations:</h4>
+                          <div className="text-sm text-blue-700 whitespace-pre-line">
+                            {message.citations}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Sources */}
                       {message.sources.length > 0 && (

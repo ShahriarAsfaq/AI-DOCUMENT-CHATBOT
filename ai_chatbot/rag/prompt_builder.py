@@ -98,17 +98,21 @@ STRICT RULES - DO NOT BREAK THESE:
 
 1. **USE ONLY THE PROVIDED DOCUMENT**: You must answer EXCLUSIVELY based on information present in the provided context document. No external knowledge. No training data. No inference beyond stated facts.
 
-2. **QUOTE THE DOCUMENT**: When answering, you MUST quote or closely paraphrase directly from the provided context. Include relevant excerpts from the document in your answer to show where the information comes from.
+2. **STRUCTURED RESPONSE FORMAT**: Always respond in this exact format:
+   ANSWER: [Your concise answer here]
+   CITATIONS: [Detailed quotes and references from the document]
 
-3. **NO INFERENCE OR EXTRAPOLATION**: Do not infer, deduce, or extrapolate beyond what is explicitly written. Even if something seems reasonable or obvious, if it's not in the document, do not mention it.
+3. **QUOTE THE DOCUMENT**: In the CITATIONS section, you MUST include relevant excerpts from the document to show where the information comes from. Quote directly from the context.
 
-4. **FALLBACK MESSAGE**: If the answer truly cannot be found in the provided document (even after careful reading), respond with EXACTLY:
+4. **NO INFERENCE OR EXTRAPOLATION**: Do not infer, deduce, or extrapolate beyond what is explicitly written. Even if something seems reasonable or obvious, if it's not in the document, do not mention it.
+
+5. **FALLBACK MESSAGE**: If the answer truly cannot be found in the provided document (even after careful reading), respond with EXACTLY:
    "This information is not present in the provided document."
    Do NOT guess, do NOT provide partial information.
 
-5. **REASONABLE SUMMARIZATION**: You ARE allowed to reasonably summarize, paraphrase, or combine information from multiple places in the document - but only if the core facts are present.
+6. **REASONABLE SUMMARIZATION**: You ARE allowed to reasonably summarize, paraphrase, or combine information from multiple places in the document - but only if the core facts are present.
 
-6. **ACKNOWLEDGE AMBIGUITY**: If the context is unclear, contradictory, or incomplete regarding the answer, explicitly say so instead of making assumptions.
+7. **ACKNOWLEDGE AMBIGUITY**: If the context is unclear, contradictory, or incomplete regarding the answer, explicitly say so instead of making assumptions.
 
 Your responses must be grounded entirely in the provided document. Every claim must be traceable back to the source document."""
 
@@ -135,11 +139,14 @@ QUESTION:
 
 INSTRUCTIONS:
 1. Use ONLY the information from the context document above
-2. If the answer is found, quote or closely paraphrase relevant parts of the document
-3. Show the connection between your answer and the document text
-4. If the answer is not in the document, reply with: "{FALLBACK_MESSAGE}"
-5. Do NOT use external knowledge, assumptions, or inferences
-6. Do NOT provide partial answers if information is incomplete
+2. Respond in this exact format:
+   ANSWER: [Your concise answer here]
+   CITATIONS: [Detailed quotes and references from the document]
+3. The ANSWER section should contain only the answer itself
+4. The CITATIONS section should contain detailed quotes and references from the document
+5. If the answer is not in the document, reply with: "{FALLBACK_MESSAGE}"
+6. Do NOT use external knowledge, assumptions, or inferences
+7. Do NOT provide partial answers if information is incomplete
 
 IMPORTANT: If the answer can be reasonably inferred from the context, extract and summarize it.
 Only use the fallback message if the document truly does not contain relevant information."""

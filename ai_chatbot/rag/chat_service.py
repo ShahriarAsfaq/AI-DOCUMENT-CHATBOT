@@ -269,9 +269,10 @@ class ChatService:
         - Answer must not be empty or too short
         - Answer should not be ONLY the fallback message
         - Answer length should be reasonable relative to context
+        - Citations should be present if answer is substantive
 
         Args:
-            answer: LLM-generated answer.
+            answer: LLM-generated answer (structured format).
             context: Retrieved context used for answering.
             question: Original user question.
 
@@ -296,7 +297,16 @@ class ChatService:
             logger.warning("Answer is ONLY the fallback message")
             return False
 
-        # Check 3: Sanity check on length - answer shouldn't be unreasonably long
+        # Parse the structured response
+        parsed_answer, parsed_citations = self._parse_llm_response(answer_clean)
+
+        # Check 3: If there's a substantive answer, there should be citations
+        if parsed_answer and len(parsed_answer.strip()) > 50:  # Substantive answer
+            if not parsed_citations or len(parsed_citations.strip()) < 20:
+                logger.warning("Substantive answer provided but citations are missing or too short")
+                return False
+
+        # Check 4: Sanity check on total length - answer shouldn't be unreasonably long
         answer_words = len(answer_clean.split())
         context_words = len(context.split())
 
@@ -307,7 +317,7 @@ class ChatService:
             )
             return False
 
-        logger.debug(f"LLM answer validation passed - {answer_words} words, grounded response")
+        logger.debug(f"LLM answer validation passed - {answer_words} words, structured response with citations")
         return True
 
     def _call_llm_deterministic(
@@ -395,6 +405,56 @@ class ChatService:
 
         return combined
 
+    def _parse_llm_response(self, llm_response: str) -> Tuple[str, str]:
+        """Parse structured LLM response into answer and citations.
+
+        Expected format:
+        ANSWER: [answer content]
+        CITATIONS: [citation details]
+
+        Args:
+            llm_response: Raw LLM response string.
+
+        Returns:
+            Tuple of (answer, citations) strings.
+        """
+        if not llm_response or not isinstance(llm_response, str):
+            logger.warning("Invalid LLM response for parsing")
+            return "", ""
+
+        response = llm_response.strip()
+
+        # Look for ANSWER: marker
+        answer_marker = "ANSWER:"
+        citations_marker = "CITATIONS:"
+
+        # Find positions
+        answer_start = response.upper().find(answer_marker)
+        citations_start = response.upper().find(citations_marker)
+
+        if answer_start == -1:
+            logger.warning("No ANSWER: marker found in LLM response")
+            return response, ""  # Return whole response as answer
+
+        # Extract answer section
+        answer_start += len(answer_marker)
+        if citations_start != -1:
+            # Extract answer up to citations marker
+            answer_text = response[answer_start:citations_start].strip()
+        else:
+            # No citations marker, take everything after ANSWER:
+            answer_text = response[answer_start:].strip()
+
+        # Extract citations section
+        citations_text = ""
+        if citations_start != -1:
+            citations_start += len(citations_marker)
+            citations_text = response[citations_start:].strip()
+
+        logger.debug(f"Parsed response: answer ({len(answer_text)} chars), citations ({len(citations_text)} chars)")
+
+        return answer_text, citations_text
+
     def _create_success_response(
         self,
         question: str,
@@ -403,21 +463,25 @@ class ChatService:
         scores: List[float],
         context: str,
     ) -> Dict[str, Any]:
-        """Create successful response.
+        """Create successful response with separated answer and citations.
 
         Args:
             question: User question.
-            answer: Generated answer.
+            answer: Generated answer (structured with ANSWER: and CITATIONS:).
             sources: Source metadata.
             scores: Similarity scores.
             context: Combined context.
 
         Returns:
-            Response dictionary.
+            Response dictionary with separated answer and citations.
         """
+        # Parse the structured LLM response
+        parsed_answer, parsed_citations = self._parse_llm_response(answer)
+
         return {
             "success": True,
-            "answer": answer,
+            "answer": parsed_answer,
+            "citations": parsed_citations,
             "question": question,
             "sources": sources,
             "similarity_scores": scores,
@@ -446,6 +510,7 @@ class ChatService:
         return {
             "success": False,
             "answer": INSUFFICIENT_CONTEXT_MESSAGE,
+            "citations": "",  # No citations for fallback responses
             "question": question,
             "sources": sources,
             "similarity_scores": scores,

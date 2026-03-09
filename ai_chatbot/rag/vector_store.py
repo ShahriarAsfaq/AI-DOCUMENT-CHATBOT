@@ -27,6 +27,13 @@ class FaissVectorStore:
         self.metadata_list = []  # List of metadata dicts corresponding to index vectors
         self.dimension = None
 
+    def clear(self) -> None:
+        """Clear the vector store, resetting it to empty state."""
+        self.index = None
+        self.metadata_list = []
+        self.dimension = None
+        logger.info("Vector store cleared")
+
     def build_index(self, embeddings: np.ndarray, metadata: List[dict] = None) -> None:
         """Build a FAISS index from embeddings.
 

@@ -109,11 +109,16 @@ class ChatAPIView(APIView):
 
             # Extract response data
             answer = rag_response.get("answer", "")
+            citations = rag_response.get("citations", "")
             sources = rag_response.get("sources", [])
             similarity_scores = rag_response.get("similarity_scores", [])
             context_count = rag_response.get("context_count", 0)
 
-            # Save assistant message
+            # Save assistant message (combine answer and citations for storage)
+            combined_content = answer
+            if citations:
+                combined_content += f"\n\nCITATIONS:\n{citations}"
+
             top_score = similarity_scores[0] if similarity_scores else None
             top_page = None
             if sources and len(sources) > 0:
@@ -122,7 +127,7 @@ class ChatAPIView(APIView):
             assistant_message = ChatMessage.objects.create(
                 session=session,
                 role="assistant",
-                content=answer,
+                content=combined_content,
                 similarity_score=top_score,
                 source_page=top_page,
             )
@@ -136,6 +141,7 @@ class ChatAPIView(APIView):
             response_data = {
                 "success": rag_response.get("success", True),
                 "answer": answer,
+                "citations": citations,
                 "question": question,
                 "sources": sources,
                 "similarity_scores": similarity_scores,

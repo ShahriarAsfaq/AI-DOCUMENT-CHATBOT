@@ -121,6 +121,13 @@ class Command(BaseCommand):
         self.stdout.write('Step 7: Building vector store...')
 
         try:
+            # Clear existing vector store before building new one
+            processed_store_path = Path(settings.VECTOR_STORE_PATH) / "faiss_store"
+            if processed_store_path.exists():
+                import shutil
+                shutil.rmtree(processed_store_path)
+                self.stdout.write('  - Cleared existing vector store')
+
             vector_store = FaissVectorStore()
 
             # Prepare metadata
@@ -130,7 +137,6 @@ class Command(BaseCommand):
             vector_store.build_index(embeddings, metadata_list)
 
             # Save to processed store
-            processed_store_path = Path(settings.VECTOR_STORE_PATH) / "faiss_store"
             vector_store.save_index(str(processed_store_path))
 
             self.stdout.write(self.style.SUCCESS(
