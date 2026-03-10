@@ -10,6 +10,10 @@ ENV PYTHONUNBUFFERED=1 \
 # Set working directory
 WORKDIR /app
 
+# create unprivileged user for security
+RUN useradd --create-home appuser && chown -R appuser /app
+USER appuser
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -34,4 +38,4 @@ RUN mkdir -p logs staticfiles media
 EXPOSE 8000
 
 # Start script
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py process_documents && python manage.py collectstatic --noinput && gunicorn ai_chatbot.wsgi:application --bind 0.0.0.0:$PORT --workers 1"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py verify_vector && python manage.py collectstatic --noinput && gunicorn ai_chatbot.wsgi:application --bind 0.0.0.0:8000 --workers 3"]

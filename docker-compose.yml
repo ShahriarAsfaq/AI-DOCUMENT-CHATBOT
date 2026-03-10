@@ -3,7 +3,7 @@ version: '3.9'
 services:
   web:
     build: .
-    command: gunicorn ai_chatbot.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    command: sh -c "python manage.py migrate --noinput && python manage.py verify_vector && python manage.py collectstatic --noinput && gunicorn ai_chatbot.wsgi:application --bind 0.0.0.0:8000 --workers 3"
     ports:
       - "8000:8000"
     env_file:

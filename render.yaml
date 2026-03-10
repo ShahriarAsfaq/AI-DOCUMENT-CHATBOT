@@ -1,0 +1,20 @@
+services:
+  - type: web_service
+    name: ai-document-chatbot
+    env: docker
+    plan: free
+    disk:
+      - name: faiss-data
+        mount_path: /app/vectors/faiss_store
+        size_gb: 1
+    dockerfile_path: ./Dockerfile
+    auto_deploy: true
+    env_vars:
+      - key: SECRET_KEY
+        from_service: null
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "$RENDER_EXTERNAL_HOSTNAME"
+      - key: VECTOR_STORE_PATH
+        value: "/app/vectors"
