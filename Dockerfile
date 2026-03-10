@@ -34,4 +34,4 @@ RUN mkdir -p logs staticfiles media
 EXPOSE 8000
 
 # Start script
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn ai_chatbot.wsgi:application --bind 0.0.0.0:8000 --workers 3"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py process_documents && python manage.py collectstatic --noinput && gunicorn ai_chatbot.wsgi:application --bind 0.0.0.0:$PORT --workers 1"]
