@@ -88,20 +88,27 @@ class ChatService:
             raise ValueError("Question must be a non-empty string")
 
         try:
+            # early intent detection on original question (catch vague queries)
+            intent = self._detect_intent(question)
+            if intent:
+                logger.info(f"Detected generic intent on original question: {intent}")
+                return self._handle_intent(intent, question)
+
             # rewrite question if history is provided
             if history:
                 rewritten = self._rewrite_question(question, history)
-                logger.info(f"Rewrote question using history: '{rewritten[:60]}...'")
+                logger.info(f"Rewrote question using history: '{rewritten[:60]}...'" )
                 question_for_retrieval = rewritten
             else:
                 question_for_retrieval = question
 
             logger.info(f"Original question: '{question[:60]}...' -> using '{question_for_retrieval[:60]}...' for retrieval")
-            # Early intent detection for generic document-level queries
+            # Early intent detection for generic document-level queries on rewritten text
             intent = self._detect_intent(question_for_retrieval)
             if intent:
                 logger.info(f"Detected generic intent: {intent}")
                 return self._handle_intent(intent, question_for_retrieval)
+
             # Step 1: Retrieve relevant chunks
             retrieved_chunks = self.retriever.retrieve(question_for_retrieval)
 

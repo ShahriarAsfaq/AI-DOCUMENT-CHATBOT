@@ -101,5 +101,15 @@ def test_rag_pipeline():
     except Exception as e:
         print(f"ERROR in history rewrite: {e}")
 
+    # 5. vague question with history should still trigger summary intent
+    question = "What is the document about?"
+    print(f"\nQUESTION (vague intent with history): {question}")
+    try:
+        result = chat_service.answer_question(question, history=history)
+        print(f"ANSWER: {result.get('answer')}")
+        print(f"CITATIONS: {result.get('citations')}")
+    except Exception as e:
+        print(f"ERROR in vague intent with history: {e}")
+
 if __name__ == "__main__":
     test_rag_pipeline()

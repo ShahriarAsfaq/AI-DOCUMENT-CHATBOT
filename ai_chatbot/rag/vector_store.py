@@ -202,6 +202,8 @@ class FaissVectorStore:
                 data = pickle.load(f)
                 self.metadata_list = data["metadata_list"]
                 self.dimension = data["dimension"]
+                # restore optional document metadata when reloading
+                self.document_metadata = data.get("document_metadata", {})
 
             logger.info(f"Reloaded metadata from {metadata_file}")
 
