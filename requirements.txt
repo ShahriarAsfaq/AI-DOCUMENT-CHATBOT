@@ -45,6 +45,9 @@ tiktoken>=0.6
 # torch>=2.0.0  # Optional: required for sentence-transformers
 
 # for development and testing
+gunicorn>=20.1.0
+
+# for development and testing
 pytest-django>=4.5
 
 

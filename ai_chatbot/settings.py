@@ -17,15 +17,21 @@ if env_file.exists():
     environ.Env.read_env(env_file)
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY')
+# use environment variable for secret key, fallback only for development
+SECRET_KEY = env('SECRET_KEY', default='replace-this-with-a-secure-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+# ALLOWED_HOSTS should be provided via environment variable, defaults to empty in prod
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default=[])
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# static configuration
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Application definition
 
@@ -126,6 +132,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=True)
 
+# allowed hosts should be configured via env in production
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'] if DEBUG else [])
+
 # Django REST Framework config (examples)
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
@@ -140,6 +149,9 @@ GROQ_API_KEY = env('GROQ_API_KEY', default='')
 
 # path or settings for vector store if needed
 VECTOR_STORE_PATH = BASE_DIR / 'vectors'
+
+# static files in production
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # ============================================================================
 # RAG & Chat Service Configuration
