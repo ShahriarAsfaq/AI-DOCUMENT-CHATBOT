@@ -41,7 +41,7 @@ class EmbeddingService:
             from sentence_transformers import SentenceTransformer
 
             cls._model = SentenceTransformer(
-                "sentence-transformers/all-MiniLM-L6-v2",
+                "sentence-transformers/paraphrase-MiniLM-L3-v2",
                 device=cls._device,
             )
             logger.info(

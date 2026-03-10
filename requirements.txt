@@ -1,54 +1,49 @@
+# Core framework
 Django>=4.2,<5
 
 djangorestframework>=3.14
 
 django-environ>=0.9
 
-# RAG dependencies
+# RAG & embeddings
 faiss-cpu>=1.7.3
 sentence-transformers>=2.2.0
-torch>=1.9.0
+# CPU-only PyTorch wheel (Railway/Linux CPU)
+# the +cpu suffix forces CPU build without CUDA/GPU dependencies
+torch==2.1.1+cpu -f https://download.pytorch.org/whl/cpu/torch_stable.html
 
 # LLM
-huggingface-hub>=0.17.0
 groq>=0.4.0
 
-python-dotenv>=1.0  # optional if using .env
-
-# cors headers
+# CORS
 django-cors-headers>=3.15
 
-# document parsing
+# Document processing
 PyMuPDF>=1.23.0
 pypdf>=3.12.0
 python-docx>=0.8.11
 
-# OCR fallback
+# OCR / images
 pytesseract>=0.3.10
 pdf2image>=1.17.0
 Pillow>=10.0.0
 
-# text processing
+# LangChain for orchestration
 langchain>=0.1.0
-langchain-community>=0.0.10
+# note: langchain-community is not required for basic usage
 
-# background/task queue
+# Async tasks
 django-redis>=5.2
 redis>=4.6
 celery>=5.3
 
-# tokenizers
+# Tokenizers (used by LangChain)
 tiktoken>=0.6
 
-# ML/AI dependencies
-# sentence-transformers>=2.2.0  # Optional: uncomment to use real sentence-transformers
-# torch>=2.0.0  # Optional: required for sentence-transformers
-
-# for development and testing
+# Production server
 gunicorn>=20.1.0
 
-# for development and testing
-pytest-django>=4.5
+# (development/test deps removed to slim install)
 
 
 
