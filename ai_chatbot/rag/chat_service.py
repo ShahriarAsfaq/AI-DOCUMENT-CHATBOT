@@ -55,22 +55,26 @@ class ChatService:
             f"Min keywords: {min_keywords_in_context}"
         )
 
-    def answer_question(self, question: str) -> Dict[str, Any]:
-        """Answer a question using RAG with LLM.
+    def answer_question(self, question: str, history: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Answer a question using RAG with LLM, optionally rewriting the query.
 
         Pipeline:
-        1. Retrieve relevant chunks using RetrieverService
-        2. Validate context quality
-        3. Build deterministic prompt
-        4. Call LLM with deterministic settings (temp=0, do_sample=False)
-        5. Return answer with sources and metadata
+        1. Rewrite question using conversation history (if provided)
+        2. Detect generic document intents
+        3. Retrieve relevant chunks using RetrieverService
+        4. Validate context quality
+        5. Build deterministic prompt
+        6. Call LLM with deterministic settings (temp=0, do_sample=False)
+        7. Return answer with sources and metadata
 
         Args:
             question: User's question.
+            history: Optional list of previous dialogue strings (user/assistant).
 
         Returns:
             Dictionary with:
             - 'answer': Generated answer string
+            - 'citations': citation text
             - 'sources': List of source metadata dicts
             - 'similarity_scores': List of similarity scores
             - 'context_count': Number of chunks used
@@ -84,10 +88,22 @@ class ChatService:
             raise ValueError("Question must be a non-empty string")
 
         try:
-            logger.info(f"Processing question: '{question[:60]}...'")
+            # rewrite question if history is provided
+            if history:
+                rewritten = self._rewrite_question(question, history)
+                logger.info(f"Rewrote question using history: '{rewritten[:60]}...'")
+                question_for_retrieval = rewritten
+            else:
+                question_for_retrieval = question
 
+            logger.info(f"Original question: '{question[:60]}...' -> using '{question_for_retrieval[:60]}...' for retrieval")
+            # Early intent detection for generic document-level queries
+            intent = self._detect_intent(question_for_retrieval)
+            if intent:
+                logger.info(f"Detected generic intent: {intent}")
+                return self._handle_intent(intent, question_for_retrieval)
             # Step 1: Retrieve relevant chunks
-            retrieved_chunks = self.retriever.retrieve(question)
+            retrieved_chunks = self.retriever.retrieve(question_for_retrieval)
 
             if not retrieved_chunks:
                 logger.warning("No chunks retrieved for question")
@@ -176,13 +192,14 @@ class ChatService:
 
             # RAG Step 4: Build prompt
             logger.info("RAG Step 4: Building LLM prompt...")
-            prompts = build_prompt(question, context)
+            # use rewritten question if available, otherwise original
+            prompts = build_prompt(question_for_retrieval, context)
             logger.debug(f"Built prompts: system ({len(prompts.get('system', ''))} chars), user ({len(prompts.get('user', ''))} chars)")
 
             # RAG Step 5: Call LLM with deterministic settings
             logger.info("RAG Step 5: Generating answer with LLM...")
             answer = self._call_llm_deterministic(
-                question,
+                question_for_retrieval,
                 context,
                 prompts,
             )
@@ -191,7 +208,7 @@ class ChatService:
 
             # RAG Step 6: Validate LLM answer for hallucinations
             logger.info("RAG Step 6: Validating LLM answer against context...")
-            is_answer_valid = self._validate_llm_answer(answer, context, question)
+            is_answer_valid = self._validate_llm_answer(answer, context, question_for_retrieval)
 
             if not is_answer_valid:
                 logger.warning("LLM answer failed validation (possible hallucination)")
@@ -257,6 +274,88 @@ class ChatService:
 
         return deduplicated
 
+    # ---------- Conversation rewriting & intent handling ----------
+    def _rewrite_question(self, question: str, history: List[str]) -> str:
+        """Use the LLM service to rewrite a question considering conversation history.
+
+        The rewritten question should be a standalone query that preserves the
+        original intent but includes necessary context from prior messages.
+        """
+        # build simple prompt
+        convo = "\n".join(history[-10:])  # keep last 10 entries
+        prompt = (
+            "Given the following conversation history and a new user question, "
+            "rewrite the question so that it is self-contained.\n\n"
+            f"Conversation history:\n{convo}\n\n"
+            f"New question: {question}\n\nRewritten question:"
+        )
+        try:
+            rewritten = self.llm_service.generate(
+                system_prompt="You are a helpful assistant.",
+                user_prompt=prompt,
+                temperature=0.0,
+                do_sample=False,
+                max_tokens=256,
+            )
+            return rewritten.strip()
+        except Exception:
+            # if rewriting fails, fall back to original question
+            return question
+
+    def _detect_intent(self, question: str) -> Optional[str]:
+        """Return an intent string for generic document questions or None."""
+        q = question.lower().strip()
+        # summary intent
+        if "summar" in q or "what is the document about" in q or "describe the document" in q:
+            return "summary"
+        # count topics
+        if "how many" in q and "topic" in q:
+            return "topics_count"
+        # list topics request
+        if "topic" in q:
+            return "topics_list"
+        return None
+
+    def _handle_intent(self, intent: str, question: str) -> Dict[str, Any]:
+        """Build a response for generic intents using stored document metadata."""
+        # access metadata from vector_store
+        doc_meta = getattr(self.retriever.vector_store, "document_metadata", {}) or {}
+        if not doc_meta:
+            # no metadata available, fallback
+            return self._create_fallback_response(question, [], [], used_fallback=True)
+
+        # take first document's metadata
+        first = list(doc_meta.values())[0]
+        summary = first.get("summary", "")
+        topics = first.get("topics", [])
+
+        if intent == "summary":
+            answer = summary or "No summary available."
+            citations = answer
+        elif intent == "topics_count":
+            count = len(topics)
+            answer = f"The document discusses {count} topic{'s' if count != 1 else ''}."
+            citations = "\n".join(f"- {t}" for t in topics)
+        elif intent == "topics_list":
+            if topics:
+                answer = "The main topics are:\n" + "\n".join(f"- {t}" for t in topics)
+                citations = answer
+            else:
+                answer = "No topics could be extracted."
+                citations = ""
+        else:
+            return self._create_fallback_response(question, [], [], used_fallback=True)
+
+        return {
+            "success": True,
+            "answer": answer,
+            "citations": citations,
+            "question": question,
+            "sources": [],
+            "similarity_scores": [],
+            "context_count": 0,
+            "used_fallback": False,
+        }
     def _validate_llm_answer(
         self,
         answer: str,

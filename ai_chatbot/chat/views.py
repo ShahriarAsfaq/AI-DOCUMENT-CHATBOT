@@ -97,9 +97,13 @@ class ChatAPIView(APIView):
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
 
-            # Generate answer using RAG
+            # gather recent history for this session (ordered oldest->newest)
+            history_msgs = ChatMessage.objects.filter(session=session).order_by("timestamp")
+            history_list = [f"{msg.role}: {msg.content}" for msg in history_msgs]
+
+            # Generate answer using RAG, rewriting question with history if present
             try:
-                rag_response = chat_service.answer_question(question)
+                rag_response = chat_service.answer_question(question, history=history_list)
             except Exception as e:
                 logger.error(f"Error generating answer: {str(e)}")
                 return Response(

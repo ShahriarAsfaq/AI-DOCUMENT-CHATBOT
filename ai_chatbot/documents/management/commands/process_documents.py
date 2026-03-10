@@ -6,6 +6,7 @@ from ai_chatbot.rag.chunker import split_into_chunks
 from ai_chatbot.rag.document import Document as RagDocument
 from ai_chatbot.rag.embeddings import get_embedding_service
 from ai_chatbot.rag.vector_store import FaissVectorStore
+from ai_chatbot.rag.utils import generate_document_summary, extract_document_topics
 import os
 import logging
 from pathlib import Path
@@ -26,6 +27,16 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write('Processing documents and building vector store with robust RAG pipeline...')
 
+        # prepare LLM service for summary/topic generation
+        llm_service = None
+        try:
+            from ai_chatbot.rag.llm_service import GroqLLMService, MockLLMService
+            llm_service = GroqLLMService(api_key=settings.GROQ_API_KEY, model="llama-3.1-8b-instant")
+        except Exception:
+            logger.warning("Could not initialize GroqLLMService - falling back to mock")
+            from ai_chatbot.rag.llm_service import MockLLMService
+            llm_service = MockLLMService()
+
         # Get all uploaded documents
         documents = Document.objects.all()
 
@@ -36,6 +47,9 @@ class Command(BaseCommand):
         all_chunks = []
         total_pages = 0
         total_valid_chunks = 0
+
+        # document-level metadata (summary/topics/chunks)
+        document_metadata = {}
 
         # 1. DOCUMENT LOADING
         self.stdout.write('Step 1: Loading and extracting text from documents...')
@@ -62,6 +76,21 @@ class Command(BaseCommand):
                     content_length = len(page.page_content.strip())
                     extraction_method = page.metadata.get('extraction_method', 'unknown')
                     self.stdout.write(f'    Page {i+1}: {content_length} chars ({extraction_method})')
+
+                # combine full text for summary/topics
+                full_text = "\n\n".join(p.page_content for p in doc_pages)
+                summary = generate_document_summary(full_text, llm_service)
+                topics = extract_document_topics(full_text, llm_service)
+                # store in document metadata map
+                document_metadata[doc.id] = {
+                    "summary": summary,
+                    "topics": topics,
+                    "chunks": [],
+                }
+                logger.info("Document summary generated for '%s'", doc.title)
+                logger.info("Topics extracted: %d", len(topics))
+                if topics:
+                    logger.info("Topic list: %s", "; ".join(topics))
 
                 # Convert to RagDocument objects for chunking
                 rag_docs = []
@@ -135,6 +164,9 @@ class Command(BaseCommand):
 
             # Build index
             vector_store.build_index(embeddings, metadata_list)
+
+            # Attach document-level metadata for intent handling
+            vector_store.document_metadata = document_metadata
 
             # Save to processed store
             vector_store.save_index(str(processed_store_path))

@@ -14,6 +14,9 @@ This repository contains a production-ready Django backend for an AI document ch
 - CORS enabled for React frontend compatibility
 - File upload (PDF/DOCX)
 - Chat interface with source citations
+- Document summary and topic extraction during ingestion
+- Intent detection for generic queries (summary, topic count/list)
+- Automatic question rewriting using conversation history before retrieval
 - Similarity scores and fallback indicators
 
 ## Setup

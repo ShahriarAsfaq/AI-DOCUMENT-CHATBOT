@@ -26,6 +26,7 @@ def test_rag_pipeline():
     print("SUCCESS: Chat service initialized")
 
     # Test question
+    # 1. regular question to verify retrieval
     question = "What is the technical test about?"
     print(f"\nQUESTION: {question}")
 
@@ -55,6 +56,50 @@ def test_rag_pipeline():
         print(f"FAILED: Error testing RAG pipeline: {str(e)}")
         import traceback
         traceback.print_exc()
+
+    # 2. test summary intent
+    question = "Please summarize the document."
+    print(f"\nQUESTION (summary intent): {question}")
+    try:
+        result = chat_service.answer_question(question)
+        print(f"ANSWER: {result.get('answer')}")
+        print(f"CITATIONS: {result.get('citations')}")
+    except Exception as e:
+        print(f"ERROR in summary intent: {e}")
+
+    # 3. test topic count/list intents
+    question = "How many topics are covered?"
+    print(f"\nQUESTION (topic count intent): {question}")
+    try:
+        result = chat_service.answer_question(question)
+        print(f"ANSWER: {result.get('answer')}")
+        print(f"CITATIONS: {result.get('citations')}")
+    except Exception as e:
+        print(f"ERROR in topic count intent: {e}")
+
+    question = "What are the main topics?"
+    print(f"\nQUESTION (topic list intent): {question}")
+    try:
+        result = chat_service.answer_question(question)
+        print(f"ANSWER: {result.get('answer')}")
+        print(f"CITATIONS: {result.get('citations')}")
+    except Exception as e:
+        print(f"ERROR in topic list intent: {e}")
+
+    # 4. test rewriting with conversation history
+    history = [
+        "user: What was the first chapter about?",
+        "assistant: It introduced microfinance principles and definitions.",
+        "user: And the second chapter?"
+    ]
+    question = "Tell me more about the regulations?"
+    print(f"\nQUESTION (with history): {question}")
+    try:
+        result = chat_service.answer_question(question, history=history)
+        print(f"REWRITTEN ANSWER: {result.get('answer')}")
+        print(f"CITATIONS: {result.get('citations')}")
+    except Exception as e:
+        print(f"ERROR in history rewrite: {e}")
 
 if __name__ == "__main__":
     test_rag_pipeline()

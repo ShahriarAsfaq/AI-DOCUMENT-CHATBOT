@@ -18,7 +18,8 @@ class FaissVectorStore:
     """FAISS-based vector store for efficient similarity search.
 
     Stores embeddings in a FAISS index and maintains metadata mapping
-    for retrieval of original chunks and documents.
+    for retrieval of original chunks and documents.  Also optionally holds
+    document-level metadata (summary/topics/chunks) for intent-based answers.
     """
 
     def __init__(self):
@@ -26,6 +27,8 @@ class FaissVectorStore:
         self.index = None
         self.metadata_list = []  # List of metadata dicts corresponding to index vectors
         self.dimension = None
+        # additional data attached at build time
+        self.document_metadata = {}
 
     def clear(self) -> None:
         """Clear the vector store, resetting it to empty state."""
@@ -114,6 +117,7 @@ class FaissVectorStore:
                     {
                         "metadata_list": self.metadata_list,
                         "dimension": self.dimension,
+                        "document_metadata": getattr(self, "document_metadata", {}),
                     },
                     f,
                 )
@@ -154,8 +158,10 @@ class FaissVectorStore:
             # Load metadata
             with open(metadata_file, "rb") as f:
                 data = pickle.load(f)
-                self.metadata_list = data["metadata_list"]
-                self.dimension = data["dimension"]
+                self.metadata_list = data.get("metadata_list", [])
+                self.dimension = data.get("dimension")
+                # restore optional document metadata
+                self.document_metadata = data.get("document_metadata", {})
 
             logger.info(f"Loaded metadata from {metadata_file}")
 
