@@ -10,16 +10,16 @@ ENV PYTHONUNBUFFERED=1 \
 # Set working directory
 WORKDIR /app
 
-# create unprivileged user for security
-RUN useradd --create-home appuser && chown -R appuser /app
-USER appuser
-
-# Install system dependencies
+# Install system dependencies (run as root)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# create unprivileged user for security and switch
+RUN useradd --create-home appuser && chown -R appuser /app
+USER appuser
 
 # Copy requirements first (better caching)
 COPY requirements.txt .
