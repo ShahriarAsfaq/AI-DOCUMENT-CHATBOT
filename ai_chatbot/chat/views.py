@@ -22,7 +22,7 @@ def get_chat_service():
     if CHAT_SERVICE is None:
         from django.conf import settings
         if hasattr(settings, 'CHAT_SERVICE'):
-            CHAT_SERVICE = settings.CHAT_SERVICE
+            CHAT_SERVICE = settings.get_or_create_chat_service()
         else:
             logger.warning(
                 "ChatService not configured in settings. "

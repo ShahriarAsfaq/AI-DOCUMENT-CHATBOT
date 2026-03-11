@@ -153,7 +153,6 @@ HUGGINGFACE_TOKEN = env('HUGGINGFACE_TOKEN', default='')
 GROQ_API_KEY = env('GROQ_API_KEY', default='')
 
 VECTOR_STORE_PATH = BASE_DIR / 'vectors'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # ============================================================================
 # RAG & Chat Service Configuration
@@ -200,10 +199,7 @@ def get_or_create_chat_service():
                     logging.warning(f"Could not load legacy vector store: {e}")
         
         if vector_store.get_index_size() == 0:
-            raise ValueError(
-                "No vector store found. Run 'python manage.py process_documents' "
-                "to process uploaded documents and build the vector store."
-            )
+            raise ValueError("No vector store found")
         
         retriever = create_retriever(vector_store, use_reranking=True, top_k=10)
         
@@ -215,11 +211,6 @@ def get_or_create_chat_service():
         
         logging.info("ChatService initialized successfully")
         
-    except ImportError as e:
-        import logging
-        logging.error(f"Failed to import required modules: {e}")
-        logging.error("Make sure sentence-transformers is installed: pip install sentence-transformers")
-        CHAT_SERVICE = None
     except Exception as e:
         import logging
         logging.error(f"Failed to initialize ChatService: {e}")
@@ -227,8 +218,6 @@ def get_or_create_chat_service():
     
     return CHAT_SERVICE
 
-# Initialize ChatService on startup
-CHAT_SERVICE = get_or_create_chat_service()
 
 # CORS allowed origins for frontend
 CORS_ALLOWED_ORIGINS = [
