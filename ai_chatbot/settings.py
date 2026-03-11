@@ -2,6 +2,11 @@ import os
 from pathlib import Path
 
 import environ
+import sys
+
+print("=== DJANGO SETTINGS DEBUG ===", file=sys.stderr)
+print(f"Current settings file: {__file__}", file=sys.stderr)
+print(f"DJANGO_SETTINGS_MODULE: {os.environ.get('DJANGO_SETTINGS_MODULE', 'Not set')}", file=sys.stderr)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +38,27 @@ ALLOWED_HOSTS = env.list(
         '.railway.app',
     ],
 )
+print(f"ALLOWED_HOSTS is set to: {ALLOWED_HOSTS}", file=sys.stderr)
+
+RAILWAY_URL = os.environ.get('RAILWAY_STATIC_URL')
+if RAILWAY_URL:
+    ALLOWED_HOSTS.append(RAILWAY_URL.replace('https://', '').replace('http://', ''))
+
+# CSRF settings for API
+CSRF_TRUSTED_ORIGINS = [
+    'https://ai-document-chatbot-production.up.railway.app',
+    'http://localhost:3000',  # If frontend is on localhost
+    'http://localhost:8000',
+]
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:8000',
+    'https://ai-document-chatbot-production.up.railway.app',
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
