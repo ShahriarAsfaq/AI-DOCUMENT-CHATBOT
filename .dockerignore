@@ -1,11 +1,29 @@
-__pycache__/
-*.pyc
-.env
 .git
-venv/
-*.egg-info
-node_modules/
-vectors/faiss_store/
-logs/
-media/
-db.sqlite3
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+.env
+venv
+node_modules
+
+# AI models
+models
+*.pt
+*.bin
+*.safetensors
+
+# vector databases
+chroma_db
+faiss_index
+vector_store
+persist_directory
+
+# user uploads
+media
+uploads
+documents
+*.pdf
+*.docx
