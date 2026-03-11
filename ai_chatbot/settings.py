@@ -1,3 +1,5 @@
+# ai_chatbot/settings.py - Fix the duplicate ALLOWED_HOSTS
+
 import os
 from pathlib import Path
 
@@ -28,6 +30,7 @@ SECRET_KEY = env('SECRET_KEY', default='replace-this-with-a-secure-key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
+# ===== ALLOWED_HOSTS CONFIGURATION - DEFINED ONCE =====
 # ALLOWED_HOSTS should be provided via environment variable, defaults to empty in prod
 ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS",
@@ -38,11 +41,16 @@ ALLOWED_HOSTS = env.list(
         '.railway.app',
     ],
 )
-print(f"ALLOWED_HOSTS is set to: {ALLOWED_HOSTS}", file=sys.stderr)
 
+# Add Railway URL if present
 RAILWAY_URL = os.environ.get('RAILWAY_STATIC_URL')
 if RAILWAY_URL:
-    ALLOWED_HOSTS.append(RAILWAY_URL.replace('https://', '').replace('http://', ''))
+    railway_domain = RAILWAY_URL.replace('https://', '').replace('http://', '')
+    if railway_domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(railway_domain)
+
+print(f"✓ FINAL ALLOWED_HOSTS: {ALLOWED_HOSTS}", file=sys.stderr)
+# ===== END ALLOWED_HOSTS CONFIGURATION =====
 
 # CSRF settings for API
 CSRF_TRUSTED_ORIGINS = [
@@ -67,7 +75,6 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -117,15 +124,11 @@ WSGI_APPLICATION = 'ai_chatbot.wsgi.application'
 ASGI_APPLICATION = 'ai_chatbot.asgi.application'
 
 # Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
 DATABASES = {
     'default': env.db(default='sqlite:///db.sqlite3')
 }
 
 # Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -142,41 +145,21 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
 STATIC_URL = 'static/'
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=True)
 
-# allowed hosts should be configured via env in production
-ALLOWED_HOSTS = env.list(
-    "ALLOWED_HOSTS",
-    default=[
-        "localhost",
-        "127.0.0.1",
-        "ai-document-chatbot-production.up.railway.app",
-        '.railway.app',
-    ],
-)
-
-# Django REST Framework config (examples)
+# Django REST Framework config
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
@@ -278,17 +261,13 @@ def get_or_create_chat_service():
 # Initialize ChatService on startup
 CHAT_SERVICE = get_or_create_chat_service()
 
-# INSTALLED_APPS += ["corsheaders"]
-MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
-
+# CORS allowed origins for frontend
 CORS_ALLOWED_ORIGINS = [
     "https://ai-document-chatbotfrontend-h1q06q4j4-shahriarasfaqs-projects.vercel.app",
     "https://ai-document-chatbotfrontend.vercel.app"
 ]
 
 # Logging Configuration
-# settings.py
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
