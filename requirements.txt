@@ -4,10 +4,10 @@ djangorestframework>=3.14
 django-environ>=0.9
 django-cors-headers>=3.15
 
-# RAG & embeddings → remove from build, load at runtime
-# faiss-cpu>=1.7.3
-# sentence-transformers>=2.2.0
-# torch==2.2.2
+# RAG & embeddings
+faiss-cpu>=1.7.3
+sentence-transformers>=2.2.0
+torch==2.2.2               # CPU-only
 
 # LangChain for text splitting
 langchain>=0.1.0
@@ -29,3 +29,6 @@ python-dotenv>=1.0
 
 # runtime server
 gunicorn>=20.1.0
+
+
+

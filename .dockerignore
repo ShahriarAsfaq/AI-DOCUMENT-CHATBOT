@@ -17,6 +17,6 @@ media
 logs
 db.sqlite3
 
-# dev/testing
+# development
 tests
 docs

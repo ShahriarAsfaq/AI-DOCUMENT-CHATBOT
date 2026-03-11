@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+
 FROM python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -16,12 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Install Python dependencies (WITHOUT heavy ML packages)
+# Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend code only
 COPY ai_chatbot ./ai_chatbot
 COPY manage.py .
 
@@ -31,5 +32,5 @@ USER appuser
 
 EXPOSE 8000
 
-# Gunicorn single worker for Railway 1GB RAM
+# Railway 1GB RAM → single worker, multiple threads
 CMD ["gunicorn","ai_chatbot.wsgi:application","--bind","0.0.0.0:$PORT","--workers","1","--threads","4","--timeout","120"]
