@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import environ
 import sys
+import dj_database_url  # Add this import
 
 print("=== DJANGO SETTINGS DEBUG ===", file=sys.stderr)
 print(f"Current settings file: {__file__}", file=sys.stderr)
@@ -44,14 +45,17 @@ print(f"✓ FINAL ALLOWED_HOSTS: {ALLOWED_HOSTS}", file=sys.stderr)
 # ===== END ALLOWED_HOSTS CONFIGURATION =====
 
 # ===== DATABASE CONFIGURATION =====
-# Use PostgreSQL on Railway (via DATABASE_URL env var), SQLite for local development
+# Use PostgreSQL on Railway, SQLite for local development
 DATABASES = {
-    'default': env.db(default='sqlite:///db.sqlite3')
+    'default': dj_database_url.config(
+        default='sqlite:///db.sqlite3',
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
-# Print database info for debugging
-db_engine = DATABASES['default']['ENGINE']
-db_type = 'PostgreSQL' if 'postgresql' in db_engine else 'SQLite'
+# Print database info for debugging (without sensitive data)
+db_type = 'PostgreSQL' if 'postgres' in str(DATABASES['default'].get('ENGINE', '')) else 'SQLite'
 print(f"✓ Using database: {db_type}", file=sys.stderr)
 # ===== END DATABASE CONFIGURATION =====
 
@@ -95,7 +99,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add for static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -189,15 +193,6 @@ def get_or_create_chat_service():
                 logging.info(f"Loaded processed vector store with {vector_store.get_index_size()} documents")
             except Exception as e:
                 logging.warning(f"Could not load processed vector store: {e}")
-        
-        if vector_store.get_index_size() == 0:
-            vector_store_path = VECTOR_STORE_PATH
-            if os.path.exists(vector_store_path / "faiss.index"):
-                try:
-                    vector_store.load_index(str(vector_store_path))
-                    logging.info(f"Loaded legacy vector store with {vector_store.get_index_size()} documents")
-                except Exception as e:
-                    logging.warning(f"Could not load legacy vector store: {e}")
         
         if vector_store.get_index_size() == 0:
             raise ValueError(
