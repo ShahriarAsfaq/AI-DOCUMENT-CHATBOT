@@ -45,6 +45,11 @@ RUN apt-get update && \
 
 # create non‑root user
 RUN useradd --create-home appuser
+
+# create required directories as root and set ownership
+RUN mkdir -p /app/logs /app/staticfiles /app/media && \
+    chown -R appuser:appuser /app/logs /app/staticfiles /app/media
+
 USER appuser
 
 # copy python packages from builder
@@ -53,8 +58,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # copy source
 COPY --chown=appuser:appuser . .
-
-RUN mkdir -p logs staticfiles media
 
 EXPOSE 8000
 
