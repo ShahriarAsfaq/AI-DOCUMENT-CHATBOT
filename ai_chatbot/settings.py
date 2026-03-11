@@ -30,6 +30,7 @@ ALLOWED_HOSTS = env.list(
         "localhost",
         "127.0.0.1",
         "ai-document-chatbot-production.up.railway.app",
+        '.railway.app',
     ],
 )
 MEDIA_URL = "/media/"
@@ -145,6 +146,7 @@ ALLOWED_HOSTS = env.list(
         "localhost",
         "127.0.0.1",
         "ai-document-chatbot-production.up.railway.app",
+        '.railway.app',
     ],
 )
 
