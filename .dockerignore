@@ -6,17 +6,15 @@ __pycache__
 .env
 venv
 
-# frontend
+# Frontend
 frontend
 node_modules
-build
-dist
 
-# local files
+# Local files
 media
 logs
 db.sqlite3
 
-# development
+# Dev/testing
 tests
 docs
