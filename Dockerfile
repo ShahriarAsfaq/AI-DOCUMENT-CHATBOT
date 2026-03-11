@@ -18,8 +18,7 @@ RUN apt-get update && \
         tesseract-ocr \
         poppler-utils \
         libjpeg62-turbo-dev \
-        zlib1g-dev \
-        libgl1-mesa-glx && \
+        zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -41,8 +40,7 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tesseract-ocr \
-        poppler-utils \
-        libgl1-mesa-glx && \
+        poppler-utils && \
     rm -rf /var/lib/apt/lists/*
 
 # create non‑root user
