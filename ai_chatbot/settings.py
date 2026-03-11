@@ -237,7 +237,7 @@ def get_or_create_chat_service():
 # Initialize ChatService on startup
 CHAT_SERVICE = get_or_create_chat_service()
 
-INSTALLED_APPS += ["corsheaders"]
+# INSTALLED_APPS += ["corsheaders"]
 MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
 
 CORS_ALLOWED_ORIGINS = [
