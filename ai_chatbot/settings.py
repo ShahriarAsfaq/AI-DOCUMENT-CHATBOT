@@ -237,6 +237,14 @@ def get_or_create_chat_service():
 # Initialize ChatService on startup
 CHAT_SERVICE = get_or_create_chat_service()
 
+INSTALLED_APPS += ["corsheaders"]
+MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
+
+CORS_ALLOWED_ORIGINS = [
+    "https://ai-document-chatbotfrontend-h1q06q4j4-shahriarasfaqs-projects.vercel.app",
+    "https://ai-document-chatbotfrontend.vercel.app"
+]
+
 # Logging Configuration
 LOGGING = {
     'version': 1,

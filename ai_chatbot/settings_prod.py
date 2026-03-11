@@ -15,3 +15,10 @@ VECTOR_STORE_PATH = Path(os.environ.get('VECTOR_STORE_PATH', BASE_DIR / 'vectors
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Other production hardening can go here (e.g. SECURE_SSL_REDIRECT)
+INSTALLED_APPS += ["corsheaders"]
+MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
+
+CORS_ALLOWED_ORIGINS = [
+    "https://ai-document-chatbotfrontend-h1q06q4j4-shahriarasfaqs-projects.vercel.app",
+    "https://ai-document-chatbotfrontend.vercel.app"
+]

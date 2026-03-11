@@ -2,28 +2,19 @@
 .gitignore
 __pycache__
 *.pyc
-*.pyo
-*.pyd
 *.log
 .env
 venv
+
+# Frontend
+frontend
 node_modules
 
-# AI models
-models
-*.pt
-*.bin
-*.safetensors
-
-# vector databases
-chroma_db
-faiss_index
-vector_store
-persist_directory
-
-# user uploads
+# Local files
 media
-uploads
-documents
-*.pdf
-*.docx
+logs
+db.sqlite3
+
+# Dev/testing
+tests
+docs
