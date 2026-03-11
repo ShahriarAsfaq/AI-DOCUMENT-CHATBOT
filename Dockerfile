@@ -32,4 +32,4 @@ USER appuser
 EXPOSE 8000
 
 # Gunicorn single worker for Railway 1GB RAM
-CMD ["gunicorn","ai_chatbot.wsgi:application","--bind","0.0.0.0:$PORT","--workers","1","--threads","4","--timeout","120"]
+CMD ["gunicorn","ai_chatbot.wsgi:application","--bind","0.0.0.0:8000","--workers","1","--threads","4","--timeout","120"]
