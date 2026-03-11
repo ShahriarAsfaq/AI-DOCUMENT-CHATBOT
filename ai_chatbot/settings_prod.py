@@ -6,7 +6,14 @@ from .settings import *  # import base settings
 DEBUG = False
 
 # ALLOWED_HOSTS should be defined in environment (Render provides RENDER_EXTERNAL_HOSTNAME)
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[env('RENDER_EXTERNAL_HOSTNAME', default='')])
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS",
+    default=[
+        "localhost",
+        "127.0.0.1",
+        "ai-document-chatbot-production.up.railway.app",
+    ],
+)
 
 # Vector store location (persisted volume)
 VECTOR_STORE_PATH = Path(os.environ.get('VECTOR_STORE_PATH', BASE_DIR / 'vectors'))

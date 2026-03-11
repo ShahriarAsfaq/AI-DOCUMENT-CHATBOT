@@ -24,8 +24,14 @@ SECRET_KEY = env('SECRET_KEY', default='replace-this-with-a-secure-key')
 DEBUG = env('DEBUG')
 
 # ALLOWED_HOSTS should be provided via environment variable, defaults to empty in prod
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default=[])
-
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS",
+    default=[
+        "localhost",
+        "127.0.0.1",
+        "ai-document-chatbot-production.up.railway.app",
+    ],
+)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -133,7 +139,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=True)
 
 # allowed hosts should be configured via env in production
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'] if DEBUG else [])
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS",
+    default=[
+        "localhost",
+        "127.0.0.1",
+        "ai-document-chatbot-production.up.railway.app",
+    ],
+) if DEBUG else [])
 
 # Django REST Framework config (examples)
 REST_FRAMEWORK = {

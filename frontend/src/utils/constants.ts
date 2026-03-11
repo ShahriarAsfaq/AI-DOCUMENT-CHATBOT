@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'https://ai-document-chatbot-production.up.railway.app:8000/api';
+export const API_BASE_URL = 'https://ai-document-chatbot-production.up.railway.app/api';
 
 export const API_ENDPOINTS = {
   DOCUMENTS: `${API_BASE_URL}/documents/documents/`,
