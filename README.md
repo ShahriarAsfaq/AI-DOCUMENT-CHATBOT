@@ -35,14 +35,13 @@ The application follows a modular, microservices-inspired architecture within a 
   - Reranker: Reorders results by relevance.
   - Chat Service: Integrates LLM (Groq) with prompt building and response generation.
 - **Database**: SQLite for simplicity, with models for chats, documents, and metadata.
-- **Async Tasks**: Celery with Redis for background document processing.
 - **Deployment**: Docker container with Gunicorn, persistent FAISS volumes.
 
 ## Technical Explanation
 
 The RAG system enhances LLM responses by retrieving relevant context from uploaded documents:
 
-1. **Ingestion**: Documents are uploaded via API, processed asynchronously (Celery), chunked, embedded, and stored in FAISS with metadata (summaries, topics).
+1. **Ingestion**: Documents are uploaded via API and processed on startup to rebuild the vector store; there is no separate queuing service.
 2. **Query Processing**: User queries are rewritten using chat history for context, then embedded and searched against the vector store.
 3. **Retrieval & Generation**: Top chunks are retrieved, reranked, and fed into a prompt for the LLM to generate cited answers.
 4. **Intent Handling**: Detects non-retrieval intents (e.g., summary requests) and responds accordingly without vector search.
@@ -61,8 +60,6 @@ This approach ensures accurate, source-backed responses while handling large doc
 - **Groq**: LLM API for chat generation.
 - **PyMuPDF (Fitz)**: PDF text extraction.
 - **Pytesseract**: OCR for image-based text in PDFs.
-- **Celery**: Asynchronous task processing.
-- **Redis**: Message broker for Celery.
 - **django-environ**: Environment variable management.
 - **django-cors-headers**: Cross-origin resource sharing.
 

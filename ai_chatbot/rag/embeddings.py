@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     """Singleton service for generating text embeddings using SentenceTransformer.
 
-    Uses sentence-transformers/all-MiniLM-L6-v2 model.
+    Uses sentence-transformers/paraphrase-MiniLM-L3-v2 model (lightweight CPU).
     """
 
     _instance = None
@@ -41,7 +41,7 @@ class EmbeddingService:
             from sentence_transformers import SentenceTransformer
 
             cls._model = SentenceTransformer(
-                "sentence-transformers/all-MiniLM-L6-v2",
+                "sentence-transformers/paraphrase-MiniLM-L3-v2",
                 device=cls._device,
             )
             logger.info(
@@ -109,7 +109,7 @@ class EmbeddingService:
 
         Returns:
             numpy array of embeddings with shape (len(texts), embedding_dim).
-            For the all-MiniLM-L6-v2 model, embedding_dim = 384.
+            For the paraphrase-MiniLM-L3-v2 model, embedding_dim = 384.
 
         Raises:
             ValueError: If texts list is empty.
@@ -150,7 +150,7 @@ class EmbeddingService:
         """Get the embedding dimension of the model.
 
         Returns:
-            Integer representing embedding dimension (384 for all-MiniLM-L6-v2).
+            Integer representing embedding dimension (384 for paraphrase-MiniLM-L3-v2).
         """
         return self._model.get_sentence_embedding_dimension()
 

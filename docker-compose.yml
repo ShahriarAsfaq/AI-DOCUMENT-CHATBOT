@@ -11,10 +11,4 @@ services:
     volumes:
       - .:/app
       - ./vectors/faiss_store:/app/vectors/faiss_store
-    depends_on:
-      - redis
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
