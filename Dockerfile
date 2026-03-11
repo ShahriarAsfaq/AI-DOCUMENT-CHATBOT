@@ -25,8 +25,6 @@ RUN pip install --upgrade pip wheel && \
 COPY ai_chatbot ./ai_chatbot
 COPY manage.py .
 
-RUN mkdir -p /app/staticfiles
-RUN chmod -R 777 /app/staticfiles
 # collect static files during build
 RUN python manage.py collectstatic --noinput
 
