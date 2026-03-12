@@ -74,6 +74,7 @@ This approach ensures accurate, source-backed responses while handling large doc
 - **Docker**: Containerization.
 - **Gunicorn**: WSGI server for production.
 - **Render/Railway**: Cloud hosting platforms.
+- DUE to resourse constraints, the frontend and backend are seperatly deployed. And the backend's heavy dependencies are being downloaded runtime to make the docker image small.
 
 ## Justification of Technical Decisions
 
@@ -89,6 +90,7 @@ This approach ensures accurate, source-backed responses while handling large doc
 - **OCR Integration**: Supports scanned PDFs, broadening document compatibility without relying on external services.
 
 ## Setup
+### Due to some production deployemnt problem, to run in local device, use the code of local_branch
 
 ### Backend Setup
 
@@ -134,20 +136,6 @@ This approach ensures accurate, source-backed responses while handling large doc
 
 The frontend will run on `http://localhost:3000` and proxy API requests to the Django backend.
 
-## Quick Start
-
-To run both backend and frontend together:
-
-**Windows:**
-```bash
-./start.bat
-```
-
-**Linux/Mac:**
-```bash
-chmod +x start.sh
-./start.sh
-```
 
 ## Deployment
 
